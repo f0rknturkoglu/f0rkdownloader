@@ -1,3 +1,15 @@
+import sys
+import os
+
+# Windows console encoding fix for PyInstaller
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+
 import questionary
 from pathlib import Path
 from rich.progress import (
@@ -213,7 +225,7 @@ class Application:
         # Çıkış mesajı
         self.ui.clear_screen()
         self.ui.console.print(
-            "[bold cyan]Görüşmek üzere! 👋[/bold cyan]",
+            "[bold cyan]Gorusmek uzere![/bold cyan]",
             justify="center",
         )
 

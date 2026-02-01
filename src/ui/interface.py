@@ -8,24 +8,24 @@ from src.ui.theme import custom_style, COLORS, APP_TITLE
 console = Console()
 
 
-# Sabit UI sembolleri
+# Sabit UI sembolleri (ASCII uyumlu)
 class Icons:
-    BACK = "◀"
-    FORWARD = "▶"
-    SUCCESS = "✓"
-    ERROR = "✗"
-    SKIP = "○"
-    DOWNLOAD = "⬇"
-    SEARCH = "🔍"
-    FOLDER = "📂"
-    FILE = "📄"
-    SETTINGS = "⚙"
-    ACCOUNT = "👤"
-    EXIT = "🚪"
-    YOUTUBE = "🔴"
-    TWITTER = "🐦"
-    CONNECTED = "●"
-    DISCONNECTED = "○"
+    BACK = "<"
+    FORWARD = ">"
+    SUCCESS = "[OK]"
+    ERROR = "[X]"
+    SKIP = "[-]"
+    DOWNLOAD = "[v]"
+    SEARCH = "[?]"
+    FOLDER = "[D]"
+    FILE = "[F]"
+    SETTINGS = "[*]"
+    ACCOUNT = "[U]"
+    EXIT = "[Q]"
+    YOUTUBE = "[YT]"
+    TWITTER = "[TW]"
+    CONNECTED = "[+]"
+    DISCONNECTED = "[-]"
 
 
 class Interface:
@@ -133,7 +133,7 @@ class Interface:
             "Ne yapmak istersiniz?",
             choices=choices,
             style=custom_style,
-            instruction="(↑↓ ile seç, Enter ile onayla)",
+            instruction="(yukari/asagi ile sec, Enter ile onayla)",
         ).ask()
 
     def show_file_tree(self, tree):
@@ -170,7 +170,7 @@ class Interface:
                 f"İndirilenler ({len(file_list)} dosya):",
                 choices=menu_choices,
                 style=custom_style,
-                instruction="(↑↓ ile seç, Enter ile onayla)",
+                instruction="(yukari/asagi ile sec, Enter ile onayla)",
             ).ask()
 
             if not action or "Geri Dön" in action:
@@ -242,7 +242,7 @@ class Interface:
                 f"{title}{page_info} - {len(file_list)} dosya:",
                 choices=choices,
                 style=custom_style,
-                instruction="(↑↓ ile seç, Enter ile onayla)",
+                instruction="(yukari/asagi ile sec, Enter ile onayla)",
             ).ask()
 
             if not result or "Geri Dön" in result:
@@ -299,7 +299,7 @@ class Interface:
             "Hesap İşlemleri:",
             choices=choices,
             style=custom_style,
-            instruction="(↑↓ ile seç, Enter ile onayla)",
+            instruction="(yukari/asagi ile sec, Enter ile onayla)",
         ).ask()
 
     def ask_cookies_file(self):
@@ -342,7 +342,7 @@ class Interface:
             "İndirmek istediğiniz playlisti seçin:",
             choices=choices,
             style=custom_style,
-            instruction="(↑↓ ile seç, Enter ile onayla)",
+            instruction="(yukari/asagi ile sec, Enter ile onayla)",
         ).ask()
 
     def ask_url(self):
@@ -389,7 +389,7 @@ class Interface:
                 f"{Icons.BACK} Geri Dön",
             ],
             style=custom_style,
-            instruction="(↑↓ ile seç, Enter ile onayla)",
+            instruction="(yukari/asagi ile sec, Enter ile onayla)",
         ).ask()
 
     def ask_format(self):
@@ -450,7 +450,7 @@ class Interface:
             "İndirmek istediğiniz videoyu seçin:",
             choices=choices,
             style=custom_style,
-            instruction="(↑↓ ile seç, Enter ile onayla)",
+            instruction="(yukari/asagi ile sec, Enter ile onayla)",
         ).ask()
 
     # ==================== Twitter/X Methods ====================
@@ -472,7 +472,7 @@ class Interface:
             "Twitter/X İndirme:",
             choices=choices,
             style=custom_style,
-            instruction="(↑↓ ile seç, Enter ile onayla)",
+            instruction="(yukari/asagi ile sec, Enter ile onayla)",
         ).ask()
 
     def ask_twitter_url(self):
