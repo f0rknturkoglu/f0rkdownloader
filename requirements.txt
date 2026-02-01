@@ -1,0 +1,15 @@
+# Core dependencies
+yt-dlp>=2024.0.0
+yt-dlp-ejs>=0.4.0
+rich>=13.0.0
+questionary>=2.0.0
+requests>=2.31.0
+gallery-dl>=1.26.0
+
+# Crypto dependencies for yt-dlp
+pycryptodomex>=3.20.0
+brotli>=1.1.0
+websockets>=12.0
+
+# Build dependencies (optional - for creating .exe)
+# pyinstaller>=6.0.0
