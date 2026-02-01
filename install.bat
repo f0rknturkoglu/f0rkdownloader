@@ -1,14 +1,12 @@
 @echo off
-chcp 65001 >nul
 title f0rkn_d0wnl0ader Kurulum
 
 echo.
-echo ╔═══════════════════════════════════════════════════════════════╗
-echo ║           f0rkn_d0wnl0ader - Kurulum Scripti                  ║
-echo ╚═══════════════════════════════════════════════════════════════╝
+echo ===================================================
+echo        f0rkn_d0wnl0ader - Kurulum Scripti
+echo ===================================================
 echo.
 
-:: Check Python
 echo [1/5] Python kontrol ediliyor...
 python --version >nul 2>&1
 if errorlevel 1 (
@@ -19,7 +17,6 @@ if errorlevel 1 (
 )
 echo [OK] Python bulundu
 
-:: Create virtual environment
 echo.
 echo [2/5] Sanal ortam olusturuluyor...
 if not exist ".venv" (
@@ -29,7 +26,6 @@ if not exist ".venv" (
     echo [OK] Sanal ortam mevcut
 )
 
-:: Activate and install dependencies
 echo.
 echo [3/5] Bagimliliklar yukleniyor...
 call .venv\Scripts\activate.bat
@@ -42,7 +38,6 @@ if errorlevel 1 (
 )
 echo [OK] Bagimliliklar yuklendi
 
-:: Install FFmpeg
 echo.
 echo [4/5] FFmpeg kontrol ediliyor...
 where ffmpeg >nul 2>&1
@@ -59,7 +54,6 @@ if errorlevel 1 (
     echo [OK] FFmpeg mevcut
 )
 
-:: Install Deno
 echo.
 echo [5/5] Deno kontrol ediliyor...
 where deno >nul 2>&1
@@ -77,10 +71,10 @@ if errorlevel 1 (
 )
 
 echo.
-echo ╔═══════════════════════════════════════════════════════════════╗
-echo ║                    Kurulum Tamamlandi!                        ║
-echo ╠═══════════════════════════════════════════════════════════════╣
-echo ║  Calistirmak icin: run.bat                                    ║
-echo ╚═══════════════════════════════════════════════════════════════╝
+echo ===================================================
+echo             Kurulum Tamamlandi!
+echo ===================================================
+echo.
+echo Calistirmak icin: run.bat
 echo.
 pause
