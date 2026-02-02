@@ -20,6 +20,8 @@ class Config:
         # Platform-specific paths
         self.youtube_path = self.base_download_path / "YouTube"
         self.twitter_path = self.base_download_path / "Twitter"
+        self.tiktok_path = self.base_download_path / "TikTok"
+        self.facebook_path = self.base_download_path / "Facebook"
 
         # YouTube settings
         # "bestvideo+bestaudio/best" = En iyi video + en iyi ses VEYA en iyi birleşik format
@@ -37,8 +39,18 @@ class Config:
         self.twitter_cookies_file: str | None = None  # Twitter cookie dosyası
         self.twitter_username: str | None = None  # Twitter kullanıcı adı
 
+        # TikTok Authentication settings
+        self.tiktok_cookies_file: str | None = None  # TikTok cookie dosyası
+        self.tiktok_username: str | None = None  # TikTok kullanıcı adı
+
+        # Facebook Authentication
+        self.facebook_cookies_file: str | None = None
+
         # Bulk download settings
         self.bulk_urls_file: str | None = None  # Path to bulk URLs file
+
+        # Theme settings
+        self.theme_color = "ubuntu"  # Default theme color
 
         # Create directories
         self._create_directories()
@@ -49,6 +61,8 @@ class Config:
             self.base_download_path,
             self.youtube_path,
             self.twitter_path,
+            self.tiktok_path,
+            self.facebook_path,
         ]
         for directory in directories:
             directory.mkdir(parents=True, exist_ok=True)

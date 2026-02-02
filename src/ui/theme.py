@@ -1,36 +1,70 @@
 from questionary import Style
 
-# Questionary (Menü) Stilleri
-custom_style = Style(
-    [
-        ("qmark", "fg:#FF9D00 bold"),  # Soru işareti rengi
-        ("question", "bold"),  # Soru metni
-        ("answer", "fg:#FF9D00 bold"),  # Cevap rengi
-        ("pointer", "fg:#FF9D00 bold"),  # Seçim oku rengi
-        ("highlighted", "fg:#FF9D00 bold"),  # Seçili öğe
-        ("selected", "fg:#FF9D00"),  # Seçilen
-        ("separator", "fg:#cc5454"),
-        ("instruction", ""),  # Talimat metni
-        ("text", ""),  # Düz metin
-        ("disabled", "fg:#858585 italic"),  # Devre dışı
-    ]
-)
-
-# Rich (Konsol) Renkleri
-COLORS = {
-    "primary": "orange1",
-    "success": "green",
-    "error": "red",
-    "warning": "yellow",
-    "info": "cyan",
-    "text": "white",
+# Tema tanımları
+# hex: Questionary (menü) için
+# primary: Rich (konsol) ana renk
+# secondary: Rich (konsol) ikincil renk (ör. info, başlıklar)
+THEMES = {
+    "ubuntu": {
+        "primary": "orange1",        # Ubuntu Orange
+        "secondary": "purple",       # Canonical Aubergine
+        "hex": "#E95420",
+        "success": "green",
+        "error": "red",
+        "warning": "yellow"
+    },
+    "macintosh": {
+        "primary": "white",          # Classic Black/White look (inverted for dark terminals)
+        "secondary": "grey70",       # Retro Grey
+        "hex": "#FFFFFF",
+        "success": "green",
+        "error": "red",
+        "warning": "yellow"
+    },
+    "fedora": {
+        "primary": "blue",           # Fedora Blue
+        "secondary": "bright_blue",  # Lighter Blue
+        "hex": "#294172",
+        "success": "green",
+        "error": "red",
+        "warning": "yellow"
+    }
 }
 
-APP_TITLE = """
-  __  ___       _          _                     _           
- / _|/ _ \ _ __| | ___ __ | |_ _   _ _ __ | | ___   __ _ | |_   _ 
-| |_| | | | '__| |/ / '_ \| __| | | | '__|| |/ / | / _` || | | | |
-|  _| |_| | |  |   <| | | | |_| |_| | |   |   <| || (_| || | |_| |
-|_|  \___/|_|  |_|\_\_| |_|\__|\__,_|_|   |_|\_\_| \__,_||_|\__,_|
-                  D 0 W N L 0 A D E R   C L I
-"""
+def get_style(theme_name="ubuntu"):
+    """Seçilen temaya göre questionary stili döndür."""
+    theme = THEMES.get(theme_name, THEMES.get("ubuntu"))
+    if not theme:
+        # Fallback if somehow theme is missing, defaulting to ubuntu values manually
+        theme = THEMES["ubuntu"]
+        
+    color = theme["hex"]
+    
+    return Style([
+        ("qmark", f"fg:{color} bold"),
+        ("question", "bold"),
+        ("answer", f"fg:{color} bold"),
+        ("pointer", f"fg:{color} bold"),
+        ("highlighted", f"fg:{color} bold"),
+        ("selected", f"fg:{color}"),
+        ("separator", "fg:#6C6C6C"),
+        ("instruction", "fg:#454545 italic"),
+        ("text", ""),
+        ("disabled", "fg:#858585 italic"),
+    ])
+
+def get_colors(theme_name="ubuntu"):
+    """Seçilen temaya göre Rich renklerini döndür."""
+    theme = THEMES.get(theme_name, THEMES.get("ubuntu"))
+    if not theme:
+        theme = THEMES["ubuntu"]
+
+    return {
+        "primary": theme["primary"],
+        "secondary": theme["secondary"],
+        "success": theme["success"],
+        "error": theme["error"],
+        "warning": theme["warning"],
+        "info": theme["secondary"],
+        "text": "white",
+    }
