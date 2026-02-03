@@ -7,85 +7,85 @@ Also supports TikTok's official data export (JSON) for liked/favorites.
 
 import json
 import os
-import subprocess
-import sys
 import zipfile
+import subprocess
+from http.cookiejar import MozillaCookieJar
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
-from src.core.base import DownloaderBase
+from src.core.base import (
+    DownloaderBase,
+    DownloadError,
+    NetworkError,
+    ValidationError,
+)
 from src.utils.history import DownloadHistory
 
 
 class TikTokDownloader(DownloaderBase):
     """TikTok downloader using yt-dlp."""
 
-    # Supported TikTok domains
     SUPPORTED_DOMAINS = ("tiktok.com", "vm.tiktok.com", "vt.tiktok.com")
 
-    def __init__(self, config):
+    def __init__(self, config: Any):
         super().__init__(config)
-        self.tiktok_download_path = Path(
-            self.config.download_path) / "TikTok"
-        os.makedirs(self.tiktok_download_path, exist_ok=True)
+        self.tiktok_download_path = Path(config.tiktok_path)
+        self.tiktok_download_path.mkdir(parents=True, exist_ok=True)
         self.history = DownloadHistory(
             config.download_path,
             platform_paths={"tiktok": self.tiktok_download_path}
         )
 
-        # yt-dlp executable path
-        python_dir = Path(sys.executable).parent
-        if os.name == "nt":
-            self.ytdlp_path = str(python_dir / "yt-dlp.exe")
-        else:
-            self.ytdlp_path = str(python_dir / "yt-dlp")
-
-        # Check if yt-dlp exists, otherwise use module call
-        if not os.path.exists(self.ytdlp_path):
-            self.ytdlp_path = "yt-dlp"
-
-    @staticmethod
-    def is_tiktok_url(url: str) -> bool:
+    def is_tiktok_url(self, url: str) -> bool:
         """Check if URL is a valid TikTok URL."""
-        return any(domain in url.lower() for domain in TikTokDownloader.SUPPORTED_DOMAINS)
+        return any(domain in url for domain in self.SUPPORTED_DOMAINS)
 
-    def read_urls_from_file(self, file_path: str | Path) -> list[str]:
-        """Read TikTok URLs from a text file."""
+    def read_urls_from_file(self, file_path: str) -> list[str]:
+        """
+        Read TikTok URLs from a text file.
+        
+        Args:
+            file_path: Path to the file containing URLs
+            
+        Returns:
+            List of valid TikTok URLs
+            
+        Raises:
+            ValidationError: If file not found or unreadable
+        """
+        path = Path(file_path)
+        if not path.exists():
+            raise ValidationError(f"Dosya bulunamadı: {file_path}")
+
         urls = []
-        file_path = Path(file_path)
-
-        if not file_path.exists():
-            raise FileNotFoundError(f"URL dosyası bulunamadı: {file_path}")
-
-        with open(file_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                # Skip empty lines and comments
-                if line and not line.startswith("#") and self.is_tiktok_url(line):
-                    urls.append(line)
-
-        return urls
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    url = line.strip()
+                    if url and self.is_tiktok_url(url):
+                        # Clean URL (remove query params)
+                        clean_url = url.split("?")[0]
+                        if clean_url not in urls:
+                            urls.append(clean_url)
+            return urls
+        except Exception as e:
+            raise ValidationError(f"Dosya okuma hatası: {e}")
 
     def _build_ytdlp_cmd(self, url: str) -> list[str]:
         """Build yt-dlp command with options."""
-        output_template = str(
-            self.tiktok_download_path / "%(uploader)s_%(id)s.%(ext)s")
-
         cmd = [
-            self.ytdlp_path,
+            "yt-dlp",
+            "--quiet",
             "--no-warnings",
-            "--no-playlist",
-            "-f", "best",  # Best quality
-            "-o", output_template,
-            "--no-mtime",  # Don't set file modification time
-            "--no-check-certificates",
+            "--format", self.config.quality,
+            "--merge-output-format", "mp4",
+            "--output", str(self.tiktok_download_path / "%(title).200s [%(id)s].%(ext)s"),
+            url
         ]
 
-        # Add cookies if configured
-        if self.config.tiktok_cookies_file and os.path.exists(self.config.tiktok_cookies_file):
-            cmd.extend(["--cookies", str(self.config.tiktok_cookies_file)])
-
-        cmd.append(url)
+        if self.config.tiktok_cookies_file:
+            cmd.extend(["--cookies", self.config.tiktok_cookies_file])
+            
         return cmd
 
     def _run_ytdlp(
@@ -98,41 +98,35 @@ class TikTokDownloader(DownloaderBase):
 
         Returns:
             Tuple of (success, message)
+            
+        Raises:
+            DownloadError: When yt-dlp not found
         """
         cmd = self._build_ytdlp_cmd(url)
-
+        
         try:
-            result = subprocess.run(
+            process = subprocess.Popen(
                 cmd,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=180,
-                check=False,
+                bufsize=1,
+                universal_newlines=True
             )
 
-            if progress_callback:
-                progress_callback(f"İndiriliyor: {url[:50]}...")
+            stdout, stderr = process.communicate()
 
-            if result.returncode == 0:
-                return True, "İndirme tamamlandı!"
+            if process.returncode == 0:
+                self.history.add_download(url, "tiktok")
+                return True, "Başarıyla indirildi"
+            else:
+                error_msg = stderr.strip() or stdout.strip() or "Bilinmeyen hata"
+                return False, f"Hata: {error_msg}"
 
-            # Parse error message
-            error = result.stderr.strip() if result.stderr else result.stdout.strip()
-            if "Private video" in error or "private" in error.lower():
-                return False, "Bu video gizli veya silinmiş"
-            if "Video unavailable" in error:
-                return False, "Video mevcut değil"
-            if "Login required" in error:
-                return False, "Giriş gerekli - Cookie dosyası ekleyin"
-
-            return False, error[:100] if error else "Bilinmeyen hata"
-
-        except subprocess.TimeoutExpired:
-            return False, "Zaman aşımı (180s)"
-        except FileNotFoundError as exc:
-            raise FileNotFoundError(
-                "yt-dlp bulunamadı! 'pip install yt-dlp' çalıştırın."
-            ) from exc
+        except FileNotFoundError:
+            raise DownloadError("yt-dlp sistemde bulunamadı!")
+        except Exception as e:
+            return False, f"Sistem hatası: {str(e)}"
 
     def download(
         self,
@@ -146,27 +140,18 @@ class TikTokDownloader(DownloaderBase):
         Returns:
             Tuple of (success, message)
         """
-        if not self.is_tiktok_url(url):
-            return False, f"Geçersiz TikTok URL'si: {url}"
-
         # Duplicate check
         if not skip_duplicate_check:
             is_dup, dup_date = self.history.is_downloaded(url, "tiktok")
             if is_dup:
                 return False, f"Bu video zaten indirilmiş! ({dup_date})"
 
-        success, message = self._run_ytdlp(url)
-
-        if success:
-            self.history.add_download(url, "tiktok")
-            return True, "İndirme tamamlandı!"
-        return False, message
+        return self._run_ytdlp(url)
 
     def bulk_download(
         self,
         urls: list[str],
-        progress_callback: Callable[[
-            int, int, str, bool, str], None] | None = None,
+        progress_callback: Callable[[int, int, str, bool, str], None] | None = None,
         skip_duplicates: bool = True,
     ) -> tuple[int, int, int, list[str]]:
         """
@@ -178,44 +163,43 @@ class TikTokDownloader(DownloaderBase):
             skip_duplicates: Skip already downloaded URLs
 
         Returns:
-            Tuple of (successful_count, failed_count, skipped_count, failed_urls)
+            Tuple of (successful, failed, skipped, failed_urls)
         """
         successful = 0
         failed = 0
         skipped = 0
         failed_urls = []
 
-        for i, url in enumerate(urls, 1):
-            # Duplicate check
+        total = len(urls)
+        for i, url in enumerate(urls):
+            current = i + 1
+            
+            if progress_callback:
+                progress_callback(current, total, url, True, "Kontrol ediliyor...")
+
             if skip_duplicates:
-                is_dup, dup_date = self.history.is_downloaded(url, "tiktok")
+                is_dup, _ = self.history.is_downloaded(url, "tiktok")
                 if is_dup:
                     skipped += 1
                     if progress_callback:
-                        progress_callback(
-                            i, len(urls), url, True, f"Atlandı (zaten var: {dup_date})")
+                        progress_callback(current, total, url, True, "Atlandı (Zaten indirilmiş)")
                     continue
 
-            try:
-                success, message = self._run_ytdlp(url)
-                if success:
-                    successful += 1
-                    self.history.add_download(url, "tiktok")
-                    if progress_callback:
-                        progress_callback(i, len(urls), url, True, "İndirildi")
-                else:
-                    failed += 1
-                    failed_urls.append(url)
-                    if progress_callback:
-                        progress_callback(i, len(urls), url, False, message)
+            if progress_callback:
+                progress_callback(current, total, url, True, "İndiriliyor...")
 
-            except (OSError, subprocess.SubprocessError) as e:
-                failed += 1
-                failed_urls.append(url)
+            success, message = self.download(url, skip_duplicate_check=True)
+
+            if success:
+                successful += 1
                 if progress_callback:
-                    progress_callback(i, len(urls), url, False, str(e)[:50])
+                    progress_callback(current, total, url, True, "Tamamlandı")
+            else:
+                failed += 1
+                failed_urls.append(f"{url} | {message}")
+                if progress_callback:
+                    progress_callback(current, total, url, False, message)
 
-        # Save failed URLs
         if failed_urls:
             self._save_failed_urls(failed_urls)
 
@@ -223,31 +207,26 @@ class TikTokDownloader(DownloaderBase):
 
     def _save_failed_urls(self, failed_urls: list[str]) -> None:
         """Save failed URLs to a text file."""
-        failed_file = os.path.join(
-            self.tiktok_download_path, "failed_downloads.txt")
-        with open(failed_file, "w", encoding="utf-8") as f:
-            for url in failed_urls:
-                f.write(url + "\n")
+        failed_file = self.tiktok_download_path / f"failed_downloads_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        try:
+            with open(failed_file, "w", encoding="utf-8") as f:
+                f.write("\n".join(failed_urls))
+        except Exception:
+            pass
 
     def bulk_download_from_file(
         self,
-        file_path: str | Path,
-        progress_callback: Callable[[
-            int, int, str, bool, str], None] | None = None,
+        file_path: str,
+        progress_callback: Callable[[int, int, str, bool, str], None] | None = None,
     ) -> tuple[int, int, int, list[str]]:
         """Download videos from a text file containing TikTok URLs."""
         urls = self.read_urls_from_file(file_path)
-
-        if not urls:
-            raise ValueError("Dosyada geçerli TikTok URL'si bulunamadı!")
-
         return self.bulk_download(urls, progress_callback)
 
     def download_liked_videos(
         self,
-        urls_file: str | Path,
-        progress_callback: Callable[[
-            int, int, str, bool, str], None] | None = None,
+        urls_file: str,
+        progress_callback: Callable[[int, int, str, bool, str], None] | None = None,
     ) -> tuple[int, int, int, list[str]]:
         """
         Download liked videos from a URL list file.
@@ -262,9 +241,8 @@ class TikTokDownloader(DownloaderBase):
 
     def download_bookmarked_videos(
         self,
-        urls_file: str | Path,
-        progress_callback: Callable[[
-            int, int, str, bool, str], None] | None = None,
+        urls_file: str,
+        progress_callback: Callable[[int, int, str, bool, str], None] | None = None,
     ) -> tuple[int, int, int, list[str]]:
         """
         Download bookmarked/favorited videos from a URL list file.
@@ -277,7 +255,7 @@ class TikTokDownloader(DownloaderBase):
         """
         return self.bulk_download_from_file(urls_file, progress_callback)
 
-    def parse_tiktok_data_export(self, file_path: str | Path) -> dict:
+    def parse_tiktok_data_export(self, file_path: str) -> dict[str, list[str]]:
         """
         Parse TikTok's official data export file (ZIP or JSON).
         
@@ -285,137 +263,87 @@ class TikTokDownloader(DownloaderBase):
         Settings > Account > Download your data > Request data (JSON format)
         
         Args:
-            file_path: Path to the ZIP or JSON file
+            file_path: Path to the exported ZIP or JSON file
             
         Returns:
             Dict with 'liked', 'favorites', 'watched' URL lists
+            
+        Raises:
+            ValidationError: If file not found or invalid format
         """
-        file_path = Path(file_path)
-        
-        if not file_path.exists():
-            raise FileNotFoundError(f"TikTok data export dosyası bulunamadı: {file_path}")
-        
-        result = {
+        path = Path(file_path)
+        if not path.exists():
+            raise ValidationError(f"Dosya bulunamadı: {file_path}")
+
+        results = {
             "liked": [],
             "favorites": [],
-            "watched": [],
+            "watched": []
         }
-        
-        # Handle ZIP file
-        if file_path.suffix.lower() == ".zip":
-            result = self._parse_tiktok_zip(file_path)
-        # Handle JSON file
-        elif file_path.suffix.lower() == ".json":
-            result = self._parse_tiktok_json(file_path)
+
+        if path.suffix == ".zip":
+            results = self._parse_tiktok_zip(path)
+        elif path.suffix == ".json":
+            results = self._parse_tiktok_json(path)
         else:
-            # Try to detect format from content
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read(100)
-                    if content.strip().startswith("{") or content.strip().startswith("["):
-                        result = self._parse_tiktok_json(file_path)
-                    else:
-                        raise ValueError("Desteklenmeyen dosya formatı. ZIP veya JSON dosyası bekleniyor.")
-            except (UnicodeDecodeError, IOError):
-                # Might be a binary ZIP file with wrong extension
-                try:
-                    result = self._parse_tiktok_zip(file_path)
-                except zipfile.BadZipFile:
-                    raise ValueError("Desteklenmeyen dosya formatı. ZIP veya JSON dosyası bekleniyor.")
-        
-        return result
-    
-    def _parse_tiktok_zip(self, zip_path: Path) -> dict:
+            raise ValidationError("Sadece ZIP veya JSON formatındaki TikTok verileri destekleniyor.")
+
+        return results
+
+    def _parse_tiktok_zip(self, zip_path: Path) -> dict[str, list[str]]:
         """Parse TikTok data export ZIP file."""
-        result = {"liked": [], "favorites": [], "watched": []}
+        results = {"liked": [], "favorites": [], "watched": []}
         
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            # Look for relevant JSON files in the ZIP
-            for name in zf.namelist():
-                name_lower = name.lower()
-                
-                # Liked videos
-                if "like" in name_lower and name.endswith(".json"):
-                    try:
-                        with zf.open(name) as f:
-                            data = json.loads(f.read().decode("utf-8"))
-                            urls = self._extract_urls_from_json(data, "liked")
-                            result["liked"].extend(urls)
-                    except (json.JSONDecodeError, KeyError):
-                        continue
-                
-                # Favorites/Bookmarks
-                if ("favorite" in name_lower or "bookmark" in name_lower) and name.endswith(".json"):
-                    try:
-                        with zf.open(name) as f:
-                            data = json.loads(f.read().decode("utf-8"))
-                            urls = self._extract_urls_from_json(data, "favorites")
-                            result["favorites"].extend(urls)
-                    except (json.JSONDecodeError, KeyError):
-                        continue
-                
-                # Watch history (optional)
-                if "watch" in name_lower and "history" in name_lower and name.endswith(".json"):
-                    try:
-                        with zf.open(name) as f:
-                            data = json.loads(f.read().decode("utf-8"))
-                            urls = self._extract_urls_from_json(data, "watched")
-                            result["watched"].extend(urls)
-                    except (json.JSONDecodeError, KeyError):
-                        continue
-        
-        return result
-    
-    def _parse_tiktok_json(self, json_path: Path) -> dict:
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as z:
+                # Look for video list files
+                for name in z.namelist():
+                    if "Video Reviews" in name and name.endswith(".json"):
+                        # This usually contains liked videos
+                        with z.open(name) as f:
+                            data = json.load(f)
+                            results["liked"] = self._extract_urls_from_json(data, "liked")
+                    
+                    elif "Favorite Videos" in name and name.endswith(".json"):
+                        with z.open(name) as f:
+                            data = json.load(f)
+                            results["favorites"] = self._extract_urls_from_json(data, "favorites")
+        except Exception as e:
+            raise ValidationError(f"TikTok ZIP açma hatası: {e}")
+            
+        return results
+
+    def _parse_tiktok_json(self, json_path: Path) -> dict[str, list[str]]:
         """Parse a single TikTok JSON data file."""
         result = {"liked": [], "favorites": [], "watched": []}
         
-        with open(json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        
-        # TikTok exports can have different structures
-        # Try to find video URLs in various locations
-        
-        # Structure 1: Direct list of items
-        if isinstance(data, list):
-            urls = self._extract_urls_from_list(data)
-            result["liked"] = urls  # Default to liked if structure unclear
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+            # TikTok JSON structure varies. Try to find potential lists.
+            # Activity > Video Reviews > VideoList
+            activity = data.get("Activity", {})
             
-        # Structure 2: Nested object with Activity section
-        elif isinstance(data, dict):
-            # Check for "Activity" section (common in TikTok exports)
-            activity = data.get("Activity", data)
+            # Liked videos
+            liked_data = activity.get("Video Reviews", {}).get("VideoList", [])
+            result["liked"] = self._extract_urls_from_list(liked_data)
             
-            # Like List
-            like_list = activity.get("Like List", {}).get("ItemFavoriteList", [])
-            if not like_list:
-                like_list = activity.get("LikeList", [])
-            if not like_list:
-                like_list = activity.get("Liked Videos", [])
-            result["liked"] = self._extract_urls_from_list(like_list)
+            # Favorites
+            fav_data = activity.get("Favorite Videos", {}).get("FavoriteVideoList", [])
+            result["favorites"] = self._extract_urls_from_list(fav_data)
             
-            # Favorites/Bookmarks
-            fav_list = activity.get("Favorite Videos", {}).get("FavoriteVideoList", [])
-            if not fav_list:
-                fav_list = activity.get("Favorites", [])
-            if not fav_list:
-                fav_list = activity.get("Bookmarks", [])
-            result["favorites"] = self._extract_urls_from_list(fav_list)
+        except Exception as e:
+            raise ValidationError(f"TikTok JSON ayrıştırma hatası: {e}")
             
-            # Watch History
-            watch_list = activity.get("Video Browsing History", {}).get("VideoList", [])
-            if not watch_list:
-                watch_list = activity.get("WatchHistory", [])
-            result["watched"] = self._extract_urls_from_list(watch_list)
-        
         return result
-    
+
     def _extract_urls_from_list(self, items: list) -> list[str]:
         """Extract TikTok URLs from a list of items."""
-        urls = []
+        urls: list[str] = []
         
         for item in items:
-            url = None
+            url: str | None = None
             
             if isinstance(item, str):
                 # Direct URL string
@@ -435,7 +363,9 @@ class TikTokDownloader(DownloaderBase):
                 
                 # Some exports have nested structure
                 if not url and "video" in item:
-                    url = item["video"].get("url") or item["video"].get("link")
+                    video_data = item.get("video", {})
+                    if isinstance(video_data, dict):
+                        url = video_data.get("url") or video_data.get("link")
             
             if url and "tiktok.com" in url:
                 # Clean URL (remove query params)
@@ -444,8 +374,12 @@ class TikTokDownloader(DownloaderBase):
                     urls.append(clean_url)
         
         return urls
-    
-    def _extract_urls_from_json(self, data: dict | list, category: str) -> list[str]:
+
+    def _extract_urls_from_json(
+        self, 
+        data: dict | list, 
+        category: str
+    ) -> list[str]:
         """Extract URLs from JSON data based on category."""
         if isinstance(data, list):
             return self._extract_urls_from_list(data)
@@ -458,7 +392,7 @@ class TikTokDownloader(DownloaderBase):
 
     def get_data_export_urls(
         self,
-        file_path: str | Path,
+        file_path: str,
         category: str = "liked"
     ) -> list[str]:
         """
@@ -471,8 +405,8 @@ class TikTokDownloader(DownloaderBase):
         Returns:
             List of TikTok video URLs
         """
-        data = self.parse_tiktok_data_export(file_path)
-        return data.get(category, [])
+        all_data = self.parse_tiktok_data_export(file_path)
+        return all_data.get(category, [])
 
     def validate_tiktok_cookies(self, cookies_file: str) -> tuple[bool, str]:
         """
@@ -486,7 +420,6 @@ class TikTokDownloader(DownloaderBase):
 
         # Validate cookie format
         try:
-            from http.cookiejar import MozillaCookieJar
             jar = MozillaCookieJar(cookies_file)
             jar.load(ignore_discard=True, ignore_expires=True)
 
@@ -510,8 +443,10 @@ class TikTokDownloader(DownloaderBase):
             self.config.tiktok_cookies_file = cookies_file
             return True, ""
 
-        except (OSError, IOError, ValueError) as e:
+        except (OSError, IOError) as e:
             return False, f"Cookie dosyası okunamadı: {e}"
+        except Exception as e:
+            return False, f"Cookie parse hatası: {e}"
 
     def get_url_extraction_script(self) -> str:
         """

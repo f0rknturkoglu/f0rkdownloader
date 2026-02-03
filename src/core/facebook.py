@@ -1,3 +1,9 @@
+"""
+Facebook Video Downloader Module
+Uses multiple methods (Selenium, yt-dlp) for reliable Facebook downloads.
+Supports single and bulk downloads with cookie authentication.
+"""
+
 import os
 import re
 import json
@@ -5,425 +11,305 @@ import time
 import requests
 import yt_dlp
 from pathlib import Path
+from typing import Any, Callable
+
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver.chrome.options import Options
+    from webdriver_manager.chrome import ChromeDriverManager
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    SELENIUM_AVAILABLE = False
+
 from rich.console import Console
-from urllib.parse import unquote
+
+from src.core.base import (
+    DownloaderBase,
+    DownloadError,
+    NetworkError,
+    ValidationError,
+    AuthenticationError,
+)
+from src.utils.history import DownloadHistory
 
 console = Console()
 
-class FacebookDownloader:
-    def __init__(self, config):
-        self.config = config
+
+class FacebookDownloader(DownloaderBase):
+    """Facebook video downloader with multiple download methods."""
+
+    def __init__(self, config: Any):
+        super().__init__(config)
         self.facebook_path = self.config.facebook_path
         self.driver = None
         
-        # Klasör oluştur
-        if not self.facebook_path.exists():
-            self.facebook_path.mkdir(parents=True, exist_ok=True)
-        
-        # Session oluştur (cookie desteği için)
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-        })
-        
-        # Cookie'leri yükle
-        self._load_cookies_to_session()
+        os.makedirs(self.facebook_path, exist_ok=True)
+        self.history = DownloadHistory(
+            config.download_path,
+            platform_paths={"facebook": Path(self.facebook_path)}
+        )
 
-    def _load_cookies_to_session(self):
-        """Netscape formatındaki cookie dosyasını requests session'a yükle."""
+    def _load_cookies_to_session(self) -> requests.Session:
+        """Load Netscape format cookies to requests session."""
+        session = requests.Session()
+        session.headers.update(self.default_headers)
+        
+        if self.config.facebook_cookies_file:
+            from http.cookiejar import MozillaCookieJar
+            jar = MozillaCookieJar(self.config.facebook_cookies_file)
+            jar.load(ignore_discard=True, ignore_expires=True)
+            session.cookies.update(jar)
+            
+        return session
+
+    def _parse_cookies_for_selenium(self) -> list[dict]:
+        """Convert cookie file to Selenium format."""
         if not self.config.facebook_cookies_file:
-            return
-        
-        try:
-            with open(self.config.facebook_cookies_file, 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith('#'):
-                        continue
-                    parts = line.split('\t')
-                    if len(parts) >= 7:
-                        domain, _, path, secure, expires, name, value = parts[:7]
-                        if 'facebook.com' in domain:
-                            self.session.cookies.set(name, value, domain=domain, path=path)
-        except Exception as e:
-            console.print(f"[dim]Cookie yükleme hatası: {e}[/dim]")
-
-    def _parse_cookies_for_selenium(self):
-        """Cookie dosyasını Selenium formatına çevir."""
+            return []
+            
         cookies = []
-        if not self.config.facebook_cookies_file:
-            return cookies
-        
         try:
-            with open(self.config.facebook_cookies_file, 'r', encoding='utf-8') as f:
+            with open(self.config.facebook_cookies_file, 'r') as f:
                 for line in f:
-                    line = line.strip()
-                    if not line or line.startswith('#'):
-                        continue
-                    parts = line.split('\t')
-                    if len(parts) >= 7:
-                        domain, _, path, secure, expires, name, value = parts[:7]
-                        if 'facebook.com' in domain:
+                    if not line.startswith('#') and line.strip():
+                        parts = line.strip().split('\t')
+                        if len(parts) >= 7:
                             cookie = {
-                                'name': name,
-                                'value': value,
-                                'domain': domain if domain.startswith('.') else f'.{domain}',
-                                'path': path,
-                                'secure': secure.upper() == 'TRUE',
+                                'domain': parts[0],
+                                'name': parts[5],
+                                'value': parts[6],
+                                'path': parts[2],
+                                'secure': parts[3] == 'TRUE',
+                                'expiry': int(parts[4]) if parts[4].isdigit() else None
                             }
-                            # Expiry ekle (0 veya boş değilse)
-                            try:
-                                exp = int(expires)
-                                if exp > 0:
-                                    cookie['expiry'] = exp
-                            except:
-                                pass
                             cookies.append(cookie)
-        except Exception as e:
-            console.print(f"[dim]Cookie parse hatası: {e}[/dim]")
-        
+        except Exception:
+            pass
         return cookies
 
-    def _init_selenium(self):
-        """Selenium WebDriver'ı başlat."""
-        if self.driver:
-            return True
+    def _init_selenium(self) -> None:
+        """Initialize Selenium WebDriver."""
+        if not SELENIUM_AVAILABLE:
+            raise DownloadError("Selenium kütüphanesi yüklü değil!")
+            
+        options = Options()
+        options.add_argument("--headless")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument(f"user-agent={self.default_headers['User-Agent']}")
         
         try:
-            from selenium import webdriver
-            from selenium.webdriver.chrome.service import Service
-            from selenium.webdriver.chrome.options import Options
-            from webdriver_manager.chrome import ChromeDriverManager
-            
-            options = Options()
-            options.add_argument('--headless=new')  # Arka planda çalış
-            options.add_argument('--disable-gpu')
-            options.add_argument('--no-sandbox')
-            options.add_argument('--disable-dev-shm-usage')
-            options.add_argument('--window-size=1920,1080')
-            options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-            options.add_argument('--disable-blink-features=AutomationControlled')
-            options.add_experimental_option('excludeSwitches', ['enable-automation'])
-            options.add_experimental_option('useAutomationExtension', False)
-            
-            # ChromeDriver otomatik indir
             service = Service(ChromeDriverManager().install())
             self.driver = webdriver.Chrome(service=service, options=options)
-            
-            # Bot tespitini atla
-            self.driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
-                'source': '''
-                    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-                '''
-            })
-            
-            return True
-            
         except Exception as e:
-            console.print(f"[red]Selenium başlatma hatası: {e}[/red]")
-            return False
+            raise DownloadError(f"WebDriver hatası: {e}")
 
-    def _load_cookies_to_selenium(self):
-        """Cookie'leri Selenium'a yükle."""
-        if not self.driver:
-            return False
-        
-        # Önce facebook.com'a git (cookie domain eşleşmesi için)
-        self.driver.get('https://www.facebook.com')
+    def _load_cookies_to_selenium(self) -> None:
+        """Load cookies to Selenium."""
+        if not self.driver or not self.config.facebook_cookies_file:
+            return
+            
+        # Selenium needs to be on the domain to set cookies
+        self.driver.get("https://www.facebook.com")
         time.sleep(2)
         
         cookies = self._parse_cookies_for_selenium()
-        loaded = 0
-        
         for cookie in cookies:
             try:
-                self.driver.add_cookie(cookie)
-                loaded += 1
-            except Exception as e:
-                pass  # Bazı cookie'ler eklenemeyebilir
-        
-        console.print(f"[dim]Selenium'a {loaded} cookie yüklendi[/dim]")
-        
-        # Sayfayı yenile
+                # Filter cookies only for facebook domain to avoid errors
+                if 'facebook.com' in cookie['domain']:
+                    # Remove expiry if it's too far in the future or null
+                    if 'expiry' in cookie:
+                        del cookie['expiry']
+                    self.driver.add_cookie(cookie)
+            except Exception:
+                continue
+                
         self.driver.refresh()
         time.sleep(2)
-        
-        return loaded > 0
 
-    def _method_selenium(self, url):
-        """Yöntem 1: Selenium ile video indirme (En etkili)."""
+    def _method_selenium(self, url: str) -> tuple[bool, str]:
+        """Method 1: Download video using Selenium (most effective)."""
+        if not SELENIUM_AVAILABLE:
+            return False, "Selenium yüklü değil"
+            
         try:
-            # Selenium'u başlat
-            if not self._init_selenium():
-                return False, "Selenium başlatılamadı"
-            
-            # Cookie'leri yükle (ilk seferde)
-            if not hasattr(self, '_selenium_cookies_loaded'):
+            if not self.driver:
+                self._init_selenium()
                 self._load_cookies_to_selenium()
-                self._selenium_cookies_loaded = True
             
-            # Video sayfasına git
-            console.print(f"[dim]Selenium: {url} yükleniyor...[/dim]")
             self.driver.get(url)
+            time.sleep(5) # Wait for page to load and JS to execute
             
-            # Sayfa yüklenmesini bekle
-            time.sleep(3)
+            # Look for video URL in page source using regex patterns
+            # Pattern 1: browser_native_sd_url / browser_native_hd_url
+            source = self.driver.page_source
             
-            # Scroll yaparak video yüklemesini tetikle
-            try:
-                self.driver.execute_script("window.scrollTo(0, 300);")
-                time.sleep(1)
-                self.driver.execute_script("window.scrollTo(0, 0);")
-                time.sleep(2)
-            except:
-                pass
-            
-            # Video URL'sini bulmak için birden fazla deneme
             video_url = None
             
-            for attempt in range(3):
-                page_source = self.driver.page_source
-                
-                # Video URL pattern'leri (öncelik sırasına göre)
-                patterns = [
-                    # HD kalite
-                    r'"hd_src":"([^"]+)"',
-                    r'"playable_url_quality_hd":"([^"]+)"',
-                    r'"browser_native_hd_url":"([^"]+)"',
-                    # SD kalite
-                    r'"sd_src":"([^"]+)"',
-                    r'"playable_url":"([^"]+)"',
-                    r'"browser_native_sd_url":"([^"]+)"',
-                    # Alternatif formatlar
-                    r'"videoUri":"([^"]+)"',
-                    r'"src":"(https://[^"]+\.mp4[^"]*)"',
-                    r'<source[^>]+src="([^"]+\.mp4[^"]*)"',
-                    # Facebook CDN linkleri
-                    r'(https://video[^"]+\.fbcdn\.net/[^"]+\.mp4[^"]*)',
-                    r'(https://scontent[^"]+\.fbcdn\.net/[^"]+\.mp4[^"]*)',
-                ]
-                
-                for pattern in patterns:
-                    matches = re.findall(pattern, page_source)
-                    for match in matches:
-                        candidate = match
-                        # URL temizle
-                        candidate = candidate.replace('\\/', '/')
-                        candidate = candidate.replace('\\u0025', '%')
-                        candidate = candidate.replace('\\u003C', '<')
-                        candidate = candidate.replace('\\u003E', '>')
-                        candidate = candidate.replace('\\"', '"')
-                        candidate = candidate.replace('\\\\', '\\')
-                        
-                        try:
-                            candidate = candidate.encode().decode('unicode_escape')
-                        except:
-                            pass
-                        
-                        # Geçerli bir video URL'si mi kontrol et
-                        if candidate and 'mp4' in candidate.lower() and 'http' in candidate.lower():
-                            video_url = candidate
-                            break
-                    
-                    if video_url:
-                        break
-                
-                if video_url:
-                    break
-                
-                # Video bulunamadı, biraz bekle ve tekrar dene
-                if attempt < 2:
-                    console.print(f"[dim]Video bulunamadı, tekrar deneniyor ({attempt + 2}/3)...[/dim]")
-                    time.sleep(3)
-                    # Sayfayı yenile
-                    self.driver.refresh()
-                    time.sleep(3)
+            # Try to find HD URL first
+            hd_match = re.search(r'browser_native_hd_url":"([^"]+)"', source)
+            if hd_match:
+                video_url = hd_match.group(1).replace('\\/', '/')
+            else:
+                sd_match = re.search(r'browser_native_sd_url":"([^"]+)"', source)
+                if sd_match:
+                    video_url = sd_match.group(1).replace('\\/', '/')
             
-            # JavaScript ile de dene
             if not video_url:
-                try:
-                    # Video elementlerinden src al
-                    videos = self.driver.find_elements("css selector", "video")
-                    for video_el in videos:
-                        src = video_el.get_attribute('src')
-                        if src and 'blob:' not in src and 'mp4' in src:
-                            video_url = src
-                            break
-                        # data-src veya currentSrc dene
-                        src = video_el.get_attribute('currentSrc')
-                        if src and 'blob:' not in src:
-                            video_url = src
-                            break
-                except:
-                    pass
-            
+                # Try pattern 2: videoData
+                vd_match = re.search(r'"videoData":\[{"hl":"([^"]+)"', source)
+                if vd_match:
+                    video_url = vd_match.group(1).replace('\\/', '/')
+
             if video_url:
-                console.print(f"[green]Video URL bulundu![/green]")
-                # Video'yu indir
                 video_id = self._extract_video_id(url) or str(int(time.time()))
                 return self._download_video_direct(video_url, video_id)
             
-            return False, "Selenium: Video URL bulunamadı"
+            return False, "Video kaynağı bulunamadı"
             
         except Exception as e:
-            return False, f"Selenium hatası: {str(e)}"
+            return False, f"Selenium hatası: {e}"
 
-    def close_selenium(self):
-        """Selenium'u kapat."""
+    def close_selenium(self) -> None:
+        """Close Selenium WebDriver."""
         if self.driver:
             try:
                 self.driver.quit()
-            except:
+            except Exception:
                 pass
             self.driver = None
 
-    def validate_facebook_cookies(self, cookie_file):
-        """Facebook cookie dosyasını kontrol et."""
+    def validate_facebook_cookies(self, cookie_file: str) -> tuple[bool, str]:
+        """Validate Facebook cookie file."""
+        if not os.path.exists(cookie_file):
+            return False, "Dosya bulunamadı"
+            
+        # Basic check for facebook specific cookies
         try:
-            with open(cookie_file, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(cookie_file, 'r') as f:
                 content = f.read()
-                has_c_user = 'c_user' in content
-                has_xs = 'xs' in content
-                is_fb_domain = '.facebook.com' in content
-                
-                if (has_c_user and has_xs) or (is_fb_domain and 'facebook.com' in content):
-                    return True, "Facebook çerezleri bulundu"
-                else:
-                    return False, "Dosyada Facebook giriş bilgileri (c_user, xs) bulunamadı."
+                if 'c_user' in content and 'xs' in content:
+                    self.config.facebook_cookies_file = cookie_file
+                    return True, ""
+                return False, "Geçersiz Facebook cookie dosyası"
         except Exception as e:
-            return False, str(e)
+            return False, f"Okuma hatası: {e}"
 
-    def _extract_video_id(self, url):
-        """URL'den video ID'sini çıkar."""
+    def _extract_video_id(self, url: str) -> str | None:
+        """Extract video ID from URL."""
+        # /videos/12345/ or /watch/?v=12345 or /reel/12345
         patterns = [
-            r'/videos/(\d+)',
-            r'/watch/?\?v=(\d+)',
-            r'/reel/(\d+)',
-            r'story_fbid=(\d+)',
+            r"videos/(\d+)",
+            r"v=(\d+)",
+            r"reel/(\d+)"
         ]
-        for pattern in patterns:
-            match = re.search(pattern, url)
+        for p in patterns:
+            match = re.search(p, url)
             if match:
                 return match.group(1)
         return None
 
-    def _download_video_direct(self, video_url, video_id):
-        """Doğrudan video URL'sinden indir."""
+    def _download_video_direct(self, video_url: str, video_id: str) -> tuple[bool, str]:
+        """Download video directly from URL."""
+        headers = self.default_headers
+        
+        filename = f"facebook_{video_id}.mp4"
+        filepath = os.path.join(self.facebook_path, filename)
+        
         try:
-            filename = self.facebook_path / f"Facebook_Video_{video_id}.mp4"
-            
-            # Zaten varsa atla
-            if filename.exists():
-                return True, f"Zaten indirilmiş: {filename.name}"
-            
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Referer': 'https://www.facebook.com/',
-            }
-            
-            response = requests.get(video_url, headers=headers, stream=True, timeout=60)
-            response.raise_for_status()
-            
-            total_size = int(response.headers.get('content-length', 0))
-            
-            with open(filename, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
+            session = self._load_cookies_to_session()
+            with session.get(video_url, stream=True, timeout=30) as r:
+                r.raise_for_status()
+                with open(filepath, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=8192):
                         f.write(chunk)
             
-            return True, f"İndirildi: {filename.name}"
-            
+            self.history.add_download(video_url, "facebook")
+            return True, f"Başarıyla indirildi: {filename}"
         except Exception as e:
-            return False, str(e)
+            return False, f"İndirme hatası: {e}"
 
-    def _method_ytdlp(self, url):
-        """yt-dlp ile indirme."""
-        ydl_opts = {
-            'format': 'bestvideo+bestaudio/best',
-            'outtmpl': str(self.facebook_path / '%(title).100s [%(id)s].%(ext)s'),
-            'ignoreerrors': True,
-            'no_warnings': True,
-            'nocheckcertificate': True,
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        }
-
-        if self.config.facebook_cookies_file:
-            ydl_opts['cookiefile'] = self.config.facebook_cookies_file
-
+    def _method_ytdlp(self, url: str) -> tuple[bool, str]:
+        """Download using yt-dlp."""
+        ydl_opts = self.get_base_options()
+        ydl_opts.update({
+            "outtmpl": os.path.join(self.facebook_path, "fb_%(id)s.%(ext)s"),
+            "cookiefile": self.config.facebook_cookies_file if self.config.facebook_cookies_file else None,
+        })
+        
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                if info:
-                    title = info.get('title', 'Facebook Video')
-                    return True, f"İndirildi: {title}"
-                return False, "Video bilgisi alınamadı"
+                error_code = ydl.download([url])
+                if error_code == 0:
+                    self.history.add_download(url, "facebook")
+                    return True, "yt-dlp ile başarıyla indirildi"
+                return False, "yt-dlp başarısız oldu"
         except Exception as e:
-            return False, str(e)
+            return False, f"yt-dlp hatası: {e}"
 
-    def download(self, url):
-        """Tüm yöntemleri sırayla deneyen ana indirme fonksiyonu."""
-        if not url:
-            return False, "URL boş."
-        
-        # Geçersiz linkleri filtrele
-        if "facebook.com/reel/?s=" in url or "facebook.com/reel?s=" in url:
-            return False, "Geçersiz link (genel reel sayfası)"
-        
-        video_id = self._extract_video_id(url)
-        
-        # Zaten indirilmiş mi kontrol et
-        if video_id:
-            existing = list(self.facebook_path.glob(f"*{video_id}*"))
-            if existing:
-                return True, f"Zaten indirilmiş: {existing[0].name}"
-        
-        # ═══════════════════════════════════════════════════════════════
-        # YÖNTEM 1: Selenium (En etkili, grup videoları için)
-        # ═══════════════════════════════════════════════════════════════
-        console.print("[cyan]▶ Yöntem 1: Selenium deneniyor...[/cyan]")
-        success, msg = self._method_selenium(url)
-        if success:
-            return True, msg
-        
-        # ═══════════════════════════════════════════════════════════════
-        # YÖNTEM 2: yt-dlp (Fallback)
-        # ═══════════════════════════════════════════════════════════════
-        console.print("[cyan]▶ Yöntem 2: yt-dlp deneniyor...[/cyan]")
+    def download(
+        self,
+        url: str,
+        progress_hooks: list[Callable] | None = None,
+        skip_duplicate_check: bool = False
+    ) -> tuple[bool, str]:
+        """Main download function that tries all methods in sequence."""
+        if not skip_duplicate_check:
+            is_dup, dup_date = self.history.is_downloaded(url, "facebook")
+            if is_dup:
+                return False, f"Zaten indirilmiş ({dup_date})"
+
+        # Try Method 1: yt-dlp first (it's faster if it works)
         success, msg = self._method_ytdlp(url)
         if success:
             return True, msg
-        
-        # Watch formatını da dene
-        if video_id and "watch/?v=" not in url:
-            watch_url = f"https://www.facebook.com/watch/?v={video_id}"
-            success, msg = self._method_ytdlp(watch_url)
+            
+        # Try Method 2: Selenium
+        if SELENIUM_AVAILABLE:
+            success, msg = self._method_selenium(url)
             if success:
                 return True, msg
         
-        return False, f"Tüm yöntemler başarısız. Son hata: {msg}"
+        return False, f"Hiçbir yöntemle indirilemedi: {msg}"
 
-    def download_bulk(self, file_path, progress_callback=None):
-        """Dosyadan toplu indirme yap."""
+    def download_bulk(
+        self,
+        file_path: str,
+        progress_callback: Callable[[int, int, str, bool, str], None] | None = None
+    ) -> tuple[int, int, list[str], int]:
+        """Bulk download from file."""
+        if not os.path.exists(file_path):
+            return 0, 0, [], 0
+            
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, 'r') as f:
                 urls = [line.strip() for line in f if line.strip()]
-        except Exception as e:
+        except (OSError, IOError):
             return 0, 0, [], 0
             
         successful = 0
         failed = 0
         skipped = 0
-        failed_urls = []
+        failed_urls: list[str] = []
         
         total = len(urls)
         
         for i, url in enumerate(urls):
             if progress_callback:
                 progress_callback(i + 1, total, url, True, "İndiriliyor...")
+            
+            # Duplicate check
+            is_dup, dup_date = self.history.is_downloaded(url, "facebook")
+            if is_dup:
+                skipped += 1
+                if progress_callback:
+                    progress_callback(i + 1, total, url, True, f"Atlandı ({dup_date})")
+                continue
                 
-            success, msg = self.download(url)
+            success, msg = self.download(url, skip_duplicate_check=True)
             
             if success:
                 successful += 1
@@ -431,7 +317,49 @@ class FacebookDownloader:
                 failed += 1
                 failed_urls.append(f"{url} | {msg}")
         
-        # Selenium'u kapat
+        # Close Selenium
         self.close_selenium()
                 
         return successful, failed, failed_urls, skipped
+
+    def get_url_extraction_script(self) -> str:
+        """
+        Return JavaScript code for extracting Facebook video URLs.
+        User should run this in browser console on their saved videos page.
+        """
+        return '''
+// Facebook Saved Video URL Extractor
+// 1. Go to your saved videos page on Facebook
+// 2. Scroll down to load all videos you want
+// 3. Open browser console (F12 -> Console)
+// 4. Paste and run this script
+// 5. Copy the result and save to a .txt file
+
+(function() {
+    const videoLinks = new Set();
+    
+    // Find all video links on the page (common patterns)
+    document.querySelectorAll('a[href*="/videos/"], a[href*="/watch/"], a[href*="/reel/"]').forEach(a => {
+        const href = a.href;
+        if (href.includes('facebook.com')) {
+            // Extract numeric ID to build a clean link
+            const match = href.match(/\\/(?:videos|reel|watch)\\/?(?:\\?v=)?(\\d+)/);
+            if (match) {
+                videoLinks.add(`https://www.facebook.com/watch/?v=${match[1]}`);
+            }
+        }
+    });
+    
+    const urls = Array.from(videoLinks).join('\\n');
+    console.log('Found ' + videoLinks.size + ' videos:\\n\\n' + urls);
+    
+    // Copy to clipboard
+    navigator.clipboard.writeText(urls).then(() => {
+        console.log('\\n✓ URLs copied to clipboard!');
+    }).catch(() => {
+        console.log('\\n⚠ Could not copy to clipboard. Select and copy manually.');
+    });
+    
+    return urls;
+})();
+'''

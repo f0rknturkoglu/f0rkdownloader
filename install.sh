@@ -6,24 +6,46 @@ echo "║           f0rkn_d0wnl0ader - Kurulum Scripti                  ║"
 echo "╚═══════════════════════════════════════════════════════════════╝"
 echo ""
 
-# Check Python
-echo "[1/5] Python kontrol ediliyor..."
-if ! command -v python3 &> /dev/null; then
-    echo "[HATA] Python3 bulunamadı!"
-    echo "Python 3.10+ yükleyin"
+# Find suitable Python version
+PYTHON_CMD=""
+
+for cmd in python3.12 python3.11 python3.10 python3; do
+    if command -v $cmd &> /dev/null; then
+        VERSION=$($cmd -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
+        major=$(echo $VERSION | cut -d. -f1)
+        minor=$(echo $VERSION | cut -d. -f2)
+        
+        if [ "$major" -eq 3 ] && [ "$minor" -ge 10 ]; then
+            PYTHON_CMD=$cmd
+            PY_VERSION=$VERSION
+            break
+        fi
+    fi
+done
+
+if [ -z "$PYTHON_CMD" ]; then
+    echo "[HATA] Python 3.10+ bulunamadı!"
+    echo "Mevcut python3 sürümünüz: $(python3 --version 2>&1)"
+    echo "Lütfen Python 3.10 veya daha yeni bir sürüm yükleyin."
     exit 1
 fi
-echo "[OK] Python bulundu: $(python3 --version)"
+
+echo "[OK] Uygun Python bulundu: $PYTHON_CMD ($PY_VERSION)"
 
 # Create virtual environment
 echo ""
 echo "[2/5] Sanal ortam oluşturuluyor..."
-if [ ! -d ".venv" ]; then
-    python3 -m venv .venv
-    echo "[OK] Sanal ortam oluşturuldu"
-else
-    echo "[OK] Sanal ortam mevcut"
+if [ -d ".venv" ]; then
+    echo "Eski sanal ortam temizleniyor..."
+    rm -rf .venv
 fi
+
+$PYTHON_CMD -m venv .venv
+if [ $? -ne 0 ]; then
+    echo "[HATA] Sanal ortam oluşturulamadı!"
+    exit 1
+fi
+echo "[OK] Sanal ortam oluşturuldu"
 
 # Activate and install dependencies
 echo ""
@@ -43,20 +65,14 @@ echo "[4/5] FFmpeg kontrol ediliyor..."
 if ! command -v ffmpeg &> /dev/null; then
     echo "FFmpeg bulunamadı, yükleniyor..."
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
         if command -v brew &> /dev/null; then
             brew install ffmpeg
         else
             echo "[UYARI] Homebrew bulunamadı. FFmpeg manuel yükleyin."
         fi
     else
-        # Linux
         if command -v apt &> /dev/null; then
             sudo apt update && sudo apt install -y ffmpeg
-        elif command -v dnf &> /dev/null; then
-            sudo dnf install -y ffmpeg
-        elif command -v pacman &> /dev/null; then
-            sudo pacman -S ffmpeg
         else
             echo "[UYARI] Paket yöneticisi bulunamadı. FFmpeg manuel yükleyin."
         fi

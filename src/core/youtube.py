@@ -6,7 +6,7 @@ Handles YouTube video and playlist downloads.
 import os
 import shutil
 import glob
-from typing import Callable
+from typing import Any, Callable
 
 import yt_dlp
 from src.core.base import DownloaderBase
@@ -16,7 +16,7 @@ from src.utils.history import DownloadHistory
 class YoutubeDownloader(DownloaderBase):
     """YouTube video and playlist downloader."""
 
-    def __init__(self, config):
+    def __init__(self, config: Any):
         super().__init__(config)
         self.youtube_path = config.youtube_path
         os.makedirs(self.youtube_path, exist_ok=True)
@@ -130,59 +130,25 @@ class YoutubeDownloader(DownloaderBase):
         if ffmpeg_path:
             ydl_opts["ffmpeg_location"] = ffmpeg_path
 
-        # YouTube-specific settings
-        ydl_opts.update({
-            "outtmpl": self._get_output_template(url),
-            "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best",
-            "format_sort": ["res", "ext:mp4:m4a", "codec:h264"],
-            "merge_output_format": "mp4",
-        })
-
-        # Audio-only settings
-        if self.config.format_type == "audio":
-            ydl_opts["format"] = "bestaudio/best"
-            ydl_opts["postprocessors"] = [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
-            }]
-
-        # Add authentication
+        # Add auth
         ydl_opts = self._add_auth_options(ydl_opts)
 
-        # Progress tracking
+        # Set output template
+        ydl_opts["outtmpl"] = self._get_output_template(url)
+
+        # Add hooks
         if progress_hooks:
             ydl_opts["progress_hooks"] = progress_hooks
 
-        # Download
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-
-                # Check if download actually succeeded
-                if not info:
-                    return False, "Video bilgisi alınamadı!"
-
-                # Check if any formats were available
-                formats = info.get("formats", [])
-                if not formats and not info.get("entries"):
-                    return False, "İndirilebilir format bulunamadı!"
-
-                title = info.get("title", "Bilinmeyen")
-                ext = info.get("ext", "mp4")
-                filename = f"{title}.{ext}"
-
-                # Add to history only on success
-                if "playlist" not in url.lower():
-                    self.history.add_download(
-                        url, "youtube", title=title, filename=filename)
-
-                return True, "İndirme tamamlandı!"
-
-        except yt_dlp.utils.DownloadError as e:
-            error_msg = str(e)
-            if "Requested format is not available" in error_msg:
-                return False, "İndirilebilir format bulunamadı!"
-            return False, f"İndirme hatası: {error_msg[:100]}"
+                error_code = ydl.download([url])
+                if error_code == 0:
+                    # Save history
+                    if "playlist" not in url.lower():
+                        self.history.add_download(url, "youtube")
+                    return True, "İndirme başarılı!"
+                else:
+                    return False, f"yt-dlp hatası (kod: {error_code})"
         except Exception as e:
-            return False, f"Beklenmeyen hata: {str(e)[:100]}"
+            return False, str(e)

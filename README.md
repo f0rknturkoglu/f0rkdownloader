@@ -1,309 +1,153 @@
-# f0rkn_d0wnl0ader
+# f0rkn Downloader
 
-YouTube, Twitter/X, TikTok ve Facebook platformlarından video indirmek için geliştirilmiş komut satırı uygulaması.
+Premium video downloader uygulamasi. YouTube, Twitter/X, TikTok ve Facebook platformlarindan video indirme destegi sunar.
 
-## Özellikler
+![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
 
-### YouTube
+## Ozellikler
 
-- Arama yaparak video bulma ve indirme
-- Tek video veya playlist indirme
-- 4K dahil en yüksek kalitede indirme
-- Premium hesap desteği (cookie ile)
+### Platform Destegi
+- **YouTube**: Video, playlist ve kutuphane indirme
+- **Twitter/X**: Tek video, toplu indirme ve bookmarks
+- **TikTok**: Tek video, toplu indirme, liked ve favorites (veri export destegi)
+- **Facebook**: Tek video ve toplu indirme (Selenium ile gelismis destek)
 
-### Twitter/X
-
-- Tek tweet videosu indirme
-- Toplu URL listesinden indirme
-- Yer işaretlerinden toplu indirme (cookie gerekli)
-
-### TikTok
-
-- Tek video link ile indirme
-- Toplu URL listesinden indirme
-- Liked videoları indirme (URL listesi gerekli)
-- Bookmarks/Favorites indirme (URL listesi gerekli)
-- Tarayıcı scripti ile URL çıkarma
-
-### Facebook 🆕
-
-- Tek video indirme
-- Toplu URL listesinden indirme
-- Grup videoları indirme (Selenium ile)
-- Watch, Reel ve Video formatları desteği
-- Cookie tabanlı oturum yönetimi
-
-### Genel
-
-- Duplicate kontrolü (aynı video tekrar indirilmez)
-- İndirilen dosyaları görüntüleme ve silme
-- Cookie tabanlı hesap bağlama
-- Universal Login (tek cookie ile tüm platformlar)
-
----
-
-## Sistem Gereksinimleri
-
-| Gereksinim | Minimum Versiyon | Açıklama               |
-| ---------- | ---------------- | ---------------------- |
-| Python     | 3.10+            | Ana runtime            |
-| FFmpeg     | 4.0+             | Video/ses birleştirme  |
-| Deno       | 1.0+             | YouTube JS çözümlemesi |
-| Chrome     | 90+              | Selenium için (opsiyonel) |
-| Windows    | 10/11            | veya Linux/macOS       |
-
----
+### Teknik Ozellikler
+- **Cookie tabanli kimlik dogrulama** - Tum platformlar icin
+- **Indirme gecmisi** - Mukerrer indirmeleri onler
+- **Kapsamli loglama** - Hata ayiklama icin
+- **Kalici ayarlar** - JSON formatinda
+- **Tema destegi** - Ubuntu, Macintosh, Fedora
+- **MVC mimarisi** - Temiz ve genisletilebilir kod
 
 ## Kurulum
 
-### Windows
+### Gereksinimler
+- Python 3.10 veya uzeri
+- FFmpeg (Sistem yolunda ekli olmali)
+- Deno (Opsiyonel, bazi scriptler icin)
 
-1. Python 3.10 veya üstünü yükleyin: https://www.python.org/downloads/
-   - Kurulumda "Add Python to PATH" seçeneğini işaretleyin
-
-2. Proje klasörünü açın ve `install.bat` dosyasını çift tıklayın
-
-3. Kurulum scripti aşağıdakileri otomatik yapar:
-   - Python sanal ortam oluşturur
-   - Pip paketlerini yükler
-   - FFmpeg yükler (winget ile)
-   - Deno yükler (winget ile)
-
-4. Kurulum tamamlandıktan sonra `run.bat` ile uygulamayı başlatın
-
-### Linux / macOS
+### Hizli Kurulum (MacOS/Linux)
 
 ```bash
-chmod +x install.sh run.sh
+chmod +x install.sh
 ./install.sh
+```
+
+Bu script otomatik olarak:
+1. Python surumunu kontrol eder (3.10+)
+2. Sanal ortam (venv) olusturur
+3. Gerekli kutuphaneleri yukler
+4. FFmpeg ve Deno durumunu kontrol eder
+
+### Manuel Kurulum
+
+1. Sanal ortam olusturun:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+2. Bagimliliklari yukleyin:
+```bash
+pip install -r requirements.txt
+```
+
+## Calistirma
+
+Kurulum scriptini kullandiysaniz:
+```bash
 ./run.sh
 ```
 
----
-
-## Proje Yapısı
-
-```
-f0rkn_d0wnl0ader/
-├── main.py                 # Ana uygulama giriş noktası
-├── requirements.txt        # Python bağımlılıkları
-├── install.bat             # Windows kurulum scripti
-├── install.sh              # Linux/macOS kurulum scripti
-├── run.bat                 # Windows çalıştırma scripti
-├── run.sh                  # Linux/macOS çalıştırma scripti
-├── build.bat               # PyInstaller ile EXE oluşturma
-├── README.md               # Bu dosya
-├── .gitignore              # Git ignore kuralları
-│
-├── scripts/                # Tarayıcı scriptleri
-│   └── universal_video_collector.user.js  # TikTok/Facebook/Twitter URL toplayıcı
-│
-└── src/                    # Kaynak kod
-    ├── __init__.py
-    ├── config.py           # Uygulama konfigürasyonu
-    │
-    ├── core/               # İndirme modülleri
-    │   ├── __init__.py
-    │   ├── base.py         # Temel indirici sınıfı
-    │   ├── youtube.py      # YouTube indirici (yt-dlp)
-    │   ├── twitter.py      # Twitter indirici (gallery-dl)
-    │   ├── tiktok.py       # TikTok indirici (yt-dlp)
-    │   ├── facebook.py     # Facebook indirici (Selenium + yt-dlp)
-    │   └── auth.py         # Kimlik doğrulama yönetimi
-    │
-    ├── ui/                 # Kullanıcı arayüzü
-    │   ├── __init__.py
-    │   ├── interface.py    # CLI arayüz bileşenleri
-    │   └── theme.py        # Renk ve stil tanımları
-    │
-    └── utils/              # Yardımcı modüller
-        ├── __init__.py
-        ├── file_ops.py     # Dosya işlemleri
-        └── history.py      # İndirme geçmişi yönetimi
+Manuel calistirmak icin:
+```bash
+python main.py
 ```
 
----
+## Mimari
 
-## İndirme Klasörü Yapısı
-
-Tüm indirmeler kullanıcının Downloads klasöründe oluşturulur:
+Proje MVC (Model-View-Controller) mimarisi kullanir:
 
 ```
-~/Downloads/f0rkn_d0wnl0ader/
-├── YouTube/                    # YouTube videoları
-│   └── [PlaylistAdi]/          # Playlist alt klasörleri
-├── Twitter/                    # Twitter videoları
-├── TikTok/                     # TikTok videoları
-├── Facebook/                   # Facebook videoları
-└── .download_history.json      # İndirme geçmişi (gizli dosya)
+benimDownloader/
+├── main.py                 # Uygulama giris noktasi ve yonlendirici
+├── src/
+│   ├── config.py           # Uygulama ayarlari (JSON ile kalici)
+│   ├── controllers/        # Is mantigi kontrolorleri
+│   │   ├── base.py         # Soyut temel kontrolor
+│   │   ├── youtube_controller.py
+│   │   ├── twitter_controller.py
+│   │   ├── tiktok_controller.py
+│   │   ├── facebook_controller.py
+│   │   ├── settings_controller.py
+│   │   └── account_controller.py
+│   ├── core/               # Platform indirme modulleri
+│   │   ├── base.py         # Temel indirici sinifi
+│   │   ├── youtube.py
+│   │   ├── twitter.py      # gallery-dl kullanir
+│   │   ├── tiktok.py       # yt-dlp kullanir
+│   │   ├── facebook.py     # Selenium + yt-dlp
+│   │   └── auth.py         # Kimlik dogrulama
+│   ├── ui/
+│   │   ├── interface.py    # Kullanici arayuzu
+│   │   └── theme.py        # Tema renkleri
+│   └── utils/
+│       ├── history.py      # Indirme gecmisi yonetimi
+│       ├── logger.py       # Merkezi loglama
+├── tests/                  # Unit testler
+│   ├── test_history.py
+│   ├── test_config.py
+│   └── test_logger.py
+└── scripts/                # Yardimci scriptler
 ```
 
----
+## Testler
 
-## Cookie Dosyası Kullanımı
+Testleri calistirmak icin:
 
-Premium YouTube içerikleri veya sosyal medya yer işaretleri için cookie gereklidir.
-
-### Cookie Alma Adımları
-
-1. Tarayıcınıza "Get cookies.txt LOCALLY" eklentisini yükleyin
-   - Chrome: Chrome Web Store
-   - Firefox: Firefox Add-ons
-
-2. YouTube, Twitter veya Facebook'a giriş yapın
-
-3. Eklenti ikonuna tıklayın ve "Export" seçin
-
-4. Dosyayı `Downloads` klasörüne kaydedin (örneğin: `cookies.txt`)
-
-5. Uygulamada "Universal Login" menüsünden dosyayı seçin
-
-### Universal Login 🆕
-
-Tek bir cookie dosyası ile tüm platformlara giriş yapabilirsiniz:
-
-1. "Hesap İşlemleri" > "Universal Cookie Girişi" seçin
-2. Cookie dosyanızı seçin
-3. Sistem otomatik olarak YouTube, Twitter, TikTok ve Facebook çerezlerini tespit eder
-
----
-
-## Universal Video Collector (Tampermonkey Script)
-
-Tek script ile TikTok, Facebook ve Twitter'dan video URL'lerini toplayın!
-
-### Kurulum
-
-1. Tarayıcınıza [Tampermonkey](https://www.tampermonkey.net/) eklentisini yükleyin
-2. `scripts/universal_video_collector.user.js` dosyasını açın
-3. İçeriği kopyalayın
-4. Tampermonkey > Yeni script oluştur > Yapıştır > Kaydet
-
-### Desteklenen Platformlar
-
-| Platform | Simge | Toplanan Linkler |
-|----------|-------|------------------|
-| TikTok   | 🎵    | `/video/` linkleri |
-| Facebook | 📘    | `/watch/`, `/videos/`, `/reel/` |
-| Twitter  | 🐦    | `/status/` linkleri |
-
-### Özellikler
-
-- **🔄 Otomatik Scroll & Topla** - Sayfayı otomatik kaydırır ve tüm videoları bulur
-- **🔍 Bu Sayfayı Tara** - Görünen videoların URL'lerini toplar
-- **💾 TXT Olarak Kaydet** - Doğrudan .txt dosyası indirir
-- **📋 Panoya Kopyala** - URL'leri kopyalar
-
-Script, hangi platformda olduğunuzu otomatik algılar ve uygun renk temasını gösterir.
-
----
-
-## Facebook Özel Notlar
-
-Facebook videoları için özel Selenium entegrasyonu bulunur:
-
-### Çalışma Mantığı
-
-1. Önce yt-dlp ile indirme denenir
-2. Başarısız olursa Selenium (headless Chrome) devreye girer
-3. Cookie'ler otomatik olarak Selenium'a yüklenir
-4. Video sayfası yüklenir ve video URL'si çıkarılır
-
-### Grup Videoları
-
-Kapalı grup videoları için:
-- Cookie dosyasında Facebook oturumunuz olmalı
-- O gruba üye olmalısınız
-- Universal Login yapılmış olmalı
-
-İlk Selenium çalıştırmasında ChromeDriver otomatik indirilir.
-
----
-
-## Bağımlılıklar
-
-requirements.txt içeriği:
-
-| Paket           | Versiyon   | Açıklama            |
-| --------------- | ---------- | ------------------- |
-| yt-dlp          | >=2024.0.0 | YouTube/TikTok indirici |
-| gallery-dl      | >=1.26.0   | Twitter indirici    |
-| selenium        | >=4.0.0    | Facebook Selenium   |
-| webdriver-manager| >=4.0.0   | ChromeDriver yönetimi|
-| rich            | >=13.0.0   | Terminal UI         |
-| questionary     | >=2.0.0    | İnteraktif menü     |
-| requests        | >=2.31.0   | HTTP istemcisi      |
-| beautifulsoup4  | >=4.12.0   | HTML parsing        |
-
----
-
-## Sorun Giderme
-
-### "Requested format is not available" hatası
-
-Sebep: JavaScript runtime eksik.
-
-Çözüm:
-```
-deno --version
-winget install DenoLand.Deno
+```bash
+# Tum testler
+python -m unittest discover tests/
 ```
 
-### Video düşük kalitede iniyor
+## Kimlik Dogrulama
 
-Sebep: FFmpeg yüklü değil.
+### Cookie Dosyasi Hazirlama
 
-Çözüm:
-```
-ffmpeg -version
-winget install Gyan.FFmpeg
-```
+1. **Tarayici eklentisi kullanin:**
+   - Chrome: Get cookies.txt LOCALLY
+   - Firefox: cookies.txt
 
-### Facebook "Cannot parse data" hatası
+2. **Ilgili platformda oturum acin:**
+   - YouTube: youtube.com
+   - Twitter/X: x.com veya twitter.com
+   - TikTok: tiktok.com
+   - Facebook: facebook.com
 
-Sebep: Video özel bir grupta veya silinmiş.
+3. **Cookie'leri export edin** ve `Downloads` klasorune kaydedin
 
-Çözüm:
-1. Universal Login yapın
-2. Cookie'nizin güncel olduğundan emin olun
-3. Gruba üye olduğunuzu kontrol edin
-4. Video silinmiş olabilir
+4. **Uygulamada "Hesap Islemleri"** menusunden dosya yolunu gosterin
 
-### Selenium hataları
+### Universal Cookie Girisi
 
-Sebep: Chrome yüklü değil veya versiyonu uyumsuz.
+Tek bir cookie dosyasinda birden fazla platform bilgisi varsa (ornegin tum siteler icin tek export aldiysaniz), "Tek Dosya ile Toplu Giris" secenegini kullanarak tek seferde tum platformlar icin oturum acabilirsiniz.
 
-Çözüm:
-1. Google Chrome'un yüklü olduğundan emin olun
-2. ChromeDriver otomatik güncellenir, tekrar deneyin
+## Loglama
 
----
+Log dosyalari `~/Downloads/f0rkn_d0wnl0ader/.logs/` klasorunde tutulur:
+- Gunluk log dosyalari: `app_YYYYMMDD.log`
+- 7 gunden eski loglar otomatik silinir
 
-## EXE Oluşturma (Opsiyonel)
+## Ayarlar
 
-Tek dosya executable oluşturmak için:
+Ayarlar `~/Downloads/f0rkn_d0wnl0ader/settings.json` dosyasinda saklanir:
+- Tema rengi
+- Video kalitesi
+- Format tercihi (video/audio)
+- Platform kimlik bilgileri
 
-```
-build.bat
-```
+## Sorumluluk Reddi
 
-Çıktı: `dist/f0rkn_d0wnl0ader.exe`
-
-Not: EXE çalıştırmak için FFmpeg ve Deno sistemde PATH'te olmalı.
-
----
-
-## Lisans
-
-MIT License
-
----
-
-## Teknik Notlar
-
-- YouTube indirmeleri yt-dlp kütüphanesi ile yapılır
-- Twitter indirmeleri gallery-dl subprocess olarak çalıştırılır
-- TikTok indirmeleri yt-dlp subprocess olarak çalıştırılır
-- Facebook indirmeleri Selenium + yt-dlp kombinasyonu ile yapılır
-- Cookie dosyaları Netscape formatında olmalıdır
-- İndirme geçmişi JSON formatında saklanır
+Bu uygulama sadece egitim amaclidir. Indirdiginiz iceriklerin telif haklari size ait olmali veya icerik sahiplerinden izin almis olmalisiniz. Yasadisi icerik indirmek kullanicinin sorumlulugundadir.

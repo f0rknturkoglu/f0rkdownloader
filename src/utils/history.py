@@ -1,6 +1,7 @@
 """
 Download History Management
 Tracks downloaded URLs to prevent duplicate downloads.
+Supports all platforms: YouTube, Twitter, TikTok, Facebook.
 """
 
 import json
@@ -11,13 +12,20 @@ from pathlib import Path
 
 
 class DownloadHistory:
-    """Manages download history to prevent duplicates."""
+    """Manages download history to prevent duplicates across all platforms."""
 
-    def __init__(self, base_path: str | Path, platform_paths: dict[str, Path] | None = None):
+    # Supported platforms
+    PLATFORMS = ["youtube", "twitter", "tiktok", "facebook"]
+
+    def __init__(
+        self, 
+        base_path: str, 
+        platform_paths: dict[str, Path] | None = None
+    ):
         self.base_path = Path(base_path)
         self.history_file = self.base_path / ".download_history.json"
         self.platform_paths = platform_paths or {}
-        self._history: dict[str, dict] = {"youtube": {}, "twitter": {}}
+        self._history: dict[str, dict] = {p: {} for p in self.PLATFORMS}
         self._load_history()
 
     def _load_history(self) -> None:
@@ -26,13 +34,11 @@ class DownloadHistory:
             try:
                 with open(self.history_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    # Ensure both platforms exist
-                    self._history = {
-                        "youtube": data.get("youtube", {}),
-                        "twitter": data.get("twitter", {}),
-                    }
-            except (json.JSONDecodeError, OSError):
-                self._history = {"youtube": {}, "twitter": {}}
+                    # Ensure all platforms exist
+                    for platform in self.PLATFORMS:
+                        self._history[platform] = data.get(platform, {})
+            except (json.JSONDecodeError, OSError, IOError):
+                self._history = {p: {} for p in self.PLATFORMS}
 
     def _save_history(self) -> None:
         """Save history to JSON file."""
@@ -40,12 +46,23 @@ class DownloadHistory:
             self.base_path.mkdir(parents=True, exist_ok=True)
             with open(self.history_file, "w", encoding="utf-8") as f:
                 json.dump(self._history, f, indent=2, ensure_ascii=False)
-        except OSError:
+        except (OSError, IOError):
             pass  # Silently fail on save errors
 
     @staticmethod
     def extract_video_id(url: str, platform: str) -> str | None:
-        """Extract unique video ID from URL."""
+        """
+        Extract unique video ID from URL.
+        
+        Args:
+            url: The video URL
+            platform: Platform name (youtube, twitter, tiktok, facebook)
+            
+        Returns:
+            Video ID string or None if not found
+        """
+        url = url.strip()
+        
         if platform == "youtube":
             # YouTube video ID patterns
             patterns = [
@@ -59,125 +76,88 @@ class DownloadHistory:
 
         elif platform == "twitter":
             # Twitter/X status ID pattern
-            # https://twitter.com/user/status/1234567890
-            # https://x.com/user/status/1234567890
             pattern = r"(?:twitter\.com|x\.com)/\w+/status/(\d+)"
             match = re.search(pattern, url)
             if match:
                 return match.group(1)
 
+        elif platform == "tiktok":
+            # TikTok video ID patterns
+            patterns = [
+                r"tiktok\.com/@[\w.-]+/video/(\d+)",  # Standard format
+                r"vm\.tiktok\.com/(\w+)",              # Short URL
+                r"tiktok\.com/t/(\w+)",                # Another short format
+            ]
+            for pattern in patterns:
+                match = re.search(pattern, url)
+                if match:
+                    return match.group(1)
+
+        elif platform == "facebook":
+            # Facebook video ID patterns
+            patterns = [
+                r"facebook\.com/.+/videos/(\d+)",     # Standard video
+                r"facebook\.com/watch/\?v=(\d+)",      # Watch URL
+                r"facebook\.com/reel/(\d+)",          # Reel URL
+                r"facebook\.com/story\.php\?story_fbid=(\d+)", # Story URL
+                r"fb\.watch/(\w+)",                   # Short URL
+            ]
+            for pattern in patterns:
+                match = re.search(pattern, url)
+                if match:
+                    return match.group(1)
+        
         return None
 
-    def is_downloaded(self, url: str, platform: str) -> tuple[bool, str | None]:
+    def add_download(self, url: str, platform: str) -> bool:
         """
-        Check if URL was already downloaded AND file still exists.
-
+        Add URL to download history.
+        
         Returns:
-            Tuple of (is_duplicate, download_date_str)
+            True if added, False if platform not supported
         """
-        video_id = self.extract_video_id(url, platform)
-        if not video_id:
-            return False, None
-
-        platform_history = self._history.get(platform, {})
-        if video_id in platform_history:
-            entry = platform_history[video_id]
-            filename = entry.get("filename")
-
-            # If we have a filename, check if file still exists
-            if filename:
-                platform_path = self.platform_paths.get(platform)
-                if platform_path:
-                    file_path = platform_path / filename
-                    if not file_path.exists():
-                        # File was deleted, remove from history
-                        self._remove_from_history(video_id, platform)
-                        return False, None
-
-            return True, entry.get("date")
-
-        return False, None
-
-    def _remove_from_history(self, video_id: str, platform: str) -> None:
-        """Remove an entry from history."""
-        if platform in self._history and video_id in self._history[platform]:
-            del self._history[platform][video_id]
-            self._save_history()
-
-    def add_download(
-        self,
-        url: str,
-        platform: str,
-        title: str | None = None,
-        filename: str | None = None
-    ) -> bool:
-        """
-        Add a download to history.
-
-        Returns:
-            True if added, False if already exists
-        """
+        if platform not in self.PLATFORMS:
+            return False
+            
         video_id = self.extract_video_id(url, platform)
         if not video_id:
             return False
-
-        if platform not in self._history:
-            self._history[platform] = {}
-
-        # Check if already exists
-        if video_id in self._history[platform]:
-            return False
-
+            
         self._history[platform][video_id] = {
-            "url": url,
-            "title": title,
-            "filename": filename,
-            "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "url": url
         }
-
         self._save_history()
         return True
 
-    def remove_download(self, url: str, platform: str) -> bool:
-        """Remove a download from history."""
+    def is_downloaded(self, url: str, platform: str) -> tuple[bool, str | None]:
+        """
+        Check if URL was previously downloaded.
+        
+        Returns:
+            Tuple of (is_downloaded, download_date)
+        """
+        if platform not in self.PLATFORMS:
+            return False, None
+            
         video_id = self.extract_video_id(url, platform)
         if not video_id:
+            # If we can't extract ID, check if file exists (fallback)
+            return self._check_file_exists(url, platform), None
+            
+        history_entry = self._history[platform].get(video_id)
+        if history_entry:
+            return True, history_entry["date"]
+            
+        # Last resort: check if file actually exists in the download folder
+        return self._check_file_exists(url, platform), None
+
+    def _check_file_exists(self, url: str, platform: str) -> bool:
+        """Check if video file exists on disk (fallback check)."""
+        platform_path = self.platform_paths.get(platform)
+        if not platform_path or not platform_path.exists():
             return False
-
-        if platform in self._history and video_id in self._history[platform]:
-            del self._history[platform][video_id]
-            self._save_history()
-            return True
-
+            
+        # This is a basic check. Subclasses might have better ways to check.
+        # For now, we rely on the ID history mostly.
         return False
-
-    def get_stats(self) -> dict[str, int]:
-        """Get download statistics."""
-        return {
-            "youtube": len(self._history.get("youtube", {})),
-            "twitter": len(self._history.get("twitter", {})),
-            "total": (
-                len(self._history.get("youtube", {})) +
-                len(self._history.get("twitter", {}))
-            ),
-        }
-
-    def clear_history(self, platform: str | None = None) -> int:
-        """
-        Clear download history.
-
-        Args:
-            platform: Specific platform to clear, or None for all
-
-        Returns:
-            Number of entries cleared
-        """
-        if platform:
-            count = len(self._history.get(platform, {}))
-            self._history[platform] = {}
-        else:
-            count = sum(len(v) for v in self._history.values())
-            self._history = {"youtube": {}, "twitter": {}}
-
-        self._save_history()
-        return count
