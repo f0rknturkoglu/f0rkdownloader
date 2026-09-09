@@ -4,12 +4,13 @@ Handles user authentication and cookie management.
 """
 
 import os
-from pathlib import Path
+
 from src.controllers.base import BaseController
-from src.core.youtube import YoutubeDownloader
-from src.core.twitter import TwitterDownloader
-from src.core.tiktok import TikTokDownloader
+from src.core.auth import AuthManager
 from src.core.facebook import FacebookDownloader
+from src.core.tiktok import TikTokDownloader
+from src.core.twitter import TwitterDownloader
+from src.core.youtube import YoutubeDownloader
 
 
 class AccountController(BaseController):
@@ -17,7 +18,9 @@ class AccountController(BaseController):
     
     def __init__(self, config, ui):
         super().__init__(config, ui)
-        # We need downloaders to validate cookies
+        # Auth manager for YouTube authentication
+        self.auth_manager = AuthManager(config)
+        # Downloaders to validate cookies
         self.yt_downloader = YoutubeDownloader(config)
         self.tw_downloader = TwitterDownloader(config)
         self.tt_downloader = TikTokDownloader(config)
@@ -75,9 +78,13 @@ class AccountController(BaseController):
         results = []
         
         # 1. YouTube
-        self.config.auth_method = "cookies_file"
-        self.config.cookies_file = file_path
-        results.append("[green]✓ YouTube[/green]")
+        if self.auth_manager.validate_cookies_file(file_path):
+            ch_name = f" ({self.config.channel_name})" if self.config.channel_name else ""
+            results.append(f"[green]✓ YouTube{ch_name}[/green]")
+        else:
+            self.config.auth_method = "cookies_file"
+            self.config.cookies_file = file_path
+            results.append("[green]✓ YouTube (Kaydedildi)[/green]")
         
         # 2. Twitter Validate
         success, msg = self.tw_downloader.validate_twitter_cookies(file_path)
@@ -133,18 +140,30 @@ class AccountController(BaseController):
                 style=self.ui.custom_style
             ).ask()
             if browser:
-                self.config.auth_method = "browser"
-                self.config.browser = browser
-                self.config.save()
-                self.ui.show_success(f"YouTube için {browser} tarayıcısı seçildi.")
+                valid = self.auth_manager.validate_browser_cookies(browser)
+                if valid:
+                    self.config.save()
+                    ch = f" ({self.config.channel_name})" if self.config.channel_name else ""
+                    self.ui.show_success(f"YouTube için {browser} tarayıcısı başarıyla bağlandı{ch}!")
+                else:
+                    self.config.auth_method = "browser"
+                    self.config.browser = browser
+                    self.config.save()
+                    self.ui.show_warning(f"{browser} tarayıcısından aktif YouTube oturumu bulunamadı, ancak ayar kaydedildi.")
         
         else:
             file_path = questionary.text("Cookie dosyası yolu (.txt):", style=self.ui.custom_style).ask()
             if file_path and os.path.exists(file_path):
-                self.config.auth_method = "cookies_file"
-                self.config.cookies_file = file_path
-                self.config.save()
-                self.ui.show_success("YouTube cookie dosyası kaydedildi.")
+                valid = self.auth_manager.validate_cookies_file(file_path)
+                if valid:
+                    self.config.save()
+                    ch = f" ({self.config.channel_name})" if self.config.channel_name else ""
+                    self.ui.show_success(f"YouTube cookie dosyası doğrulandı{ch}!")
+                else:
+                    self.config.auth_method = "cookies_file"
+                    self.config.cookies_file = file_path
+                    self.config.save()
+                    self.ui.show_success("YouTube cookie dosyası kaydedildi.")
             else:
                 self.ui.show_error("Geçersiz dosya yolu.")
         
@@ -159,6 +178,7 @@ class AccountController(BaseController):
             
         success, msg = self.tw_downloader.validate_twitter_cookies(file_path)
         if success:
+            self.config.twitter_cookies_file = file_path
             username = questionary.text("Twitter Kullanıcı Adınız (Opsiyonel):", style=self.ui.custom_style).ask()
             self.config.twitter_username = username
             self.config.save()
@@ -179,6 +199,7 @@ class AccountController(BaseController):
             
         success, msg = self.tt_downloader.validate_tiktok_cookies(file_path)
         if success:
+            self.config.tiktok_cookies_file = file_path
             username = questionary.text("TikTok Kullanıcı Adınız (Opsiyonel):", style=self.ui.custom_style).ask()
             self.config.tiktok_username = username
             self.config.save()
@@ -199,6 +220,7 @@ class AccountController(BaseController):
             
         success, msg = self.fb_downloader.validate_facebook_cookies(file_path)
         if success:
+            self.config.facebook_cookies_file = file_path
             self.config.save()
             self.ui.show_success("Facebook bağlantısı başarılı!")
             self.logger.auth_event("facebook", True, "cookies")

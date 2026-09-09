@@ -4,19 +4,21 @@ Uses multiple methods (Selenium, yt-dlp) for reliable Facebook downloads.
 Supports single and bulk downloads with cookie authentication.
 """
 
+import atexit
 import os
 import re
-import json
 import time
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
 import requests
 import yt_dlp
-from pathlib import Path
-from typing import Any, Callable
 
 try:
     from selenium import webdriver
-    from selenium.webdriver.chrome.service import Service
     from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
     from webdriver_manager.chrome import ChromeDriverManager
     SELENIUM_AVAILABLE = True
 except ImportError:
@@ -27,9 +29,6 @@ from rich.console import Console
 from src.core.base import (
     DownloaderBase,
     DownloadError,
-    NetworkError,
-    ValidationError,
-    AuthenticationError,
 )
 from src.utils.history import DownloadHistory
 
@@ -45,6 +44,7 @@ class FacebookDownloader(DownloaderBase):
         self.driver = None
         
         os.makedirs(self.facebook_path, exist_ok=True)
+        atexit.register(self.close_selenium)
         self.history = DownloadHistory(
             config.download_path,
             platform_paths={"facebook": Path(self.facebook_path)}
@@ -101,10 +101,15 @@ class FacebookDownloader(DownloaderBase):
         options.add_argument(f"user-agent={self.default_headers['User-Agent']}")
         
         try:
-            service = Service(ChromeDriverManager().install())
-            self.driver = webdriver.Chrome(service=service, options=options)
-        except Exception as e:
-            raise DownloadError(f"WebDriver hatası: {e}")
+            # Try native Selenium 4 Manager first (no webdriver-manager download needed)
+            self.driver = webdriver.Chrome(options=options)
+        except Exception:
+            try:
+                # Fallback to ChromeDriverManager
+                service = Service(ChromeDriverManager().install())
+                self.driver = webdriver.Chrome(service=service, options=options)
+            except Exception as e:
+                raise DownloadError(f"WebDriver hatası: {e}")
 
     def _load_cookies_to_selenium(self) -> None:
         """Load cookies to Selenium."""
@@ -166,7 +171,7 @@ class FacebookDownloader(DownloaderBase):
 
             if video_url:
                 video_id = self._extract_video_id(url) or str(int(time.time()))
-                return self._download_video_direct(video_url, video_id)
+                return self._download_video_direct(video_url, video_id, original_url=url)
             
             return False, "Video kaynağı bulunamadı"
             
@@ -212,22 +217,27 @@ class FacebookDownloader(DownloaderBase):
                 return match.group(1)
         return None
 
-    def _download_video_direct(self, video_url: str, video_id: str) -> tuple[bool, str]:
+    def _download_video_direct(
+        self,
+        video_url: str,
+        video_id: str,
+        original_url: str | None = None
+    ) -> tuple[bool, str]:
         """Download video directly from URL."""
-        headers = self.default_headers
-        
         filename = f"facebook_{video_id}.mp4"
         filepath = os.path.join(self.facebook_path, filename)
         
         try:
-            session = self._load_cookies_to_session()
-            with session.get(video_url, stream=True, timeout=30) as r:
-                r.raise_for_status()
-                with open(filepath, 'wb') as f:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        f.write(chunk)
+            with self._load_cookies_to_session() as session:
+                with session.get(video_url, stream=True, timeout=30) as r:
+                    r.raise_for_status()
+                    with open(filepath, 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=65536):
+                            if chunk:
+                                f.write(chunk)
             
-            self.history.add_download(video_url, "facebook")
+            history_url = original_url if original_url else video_url
+            self.history.add_download(history_url, "facebook")
             return True, f"Başarıyla indirildi: {filename}"
         except Exception as e:
             return False, f"İndirme hatası: {e}"
@@ -279,16 +289,16 @@ class FacebookDownloader(DownloaderBase):
         self,
         file_path: str,
         progress_callback: Callable[[int, int, str, bool, str], None] | None = None
-    ) -> tuple[int, int, list[str], int]:
+    ) -> tuple[int, int, int, list[str]]:
         """Bulk download from file."""
         if not os.path.exists(file_path):
-            return 0, 0, [], 0
+            return 0, 0, 0, []
             
         try:
             with open(file_path, 'r') as f:
                 urls = [line.strip() for line in f if line.strip()]
-        except (OSError, IOError):
-            return 0, 0, [], 0
+        except OSError:
+            return 0, 0, 0, []
             
         successful = 0
         failed = 0
@@ -317,10 +327,13 @@ class FacebookDownloader(DownloaderBase):
                 failed += 1
                 failed_urls.append(f"{url} | {msg}")
         
+        # Batch save history
+        self.history.save_history()
+
         # Close Selenium
         self.close_selenium()
                 
-        return successful, failed, failed_urls, skipped
+        return successful, failed, skipped, failed_urls
 
     def get_url_extraction_script(self) -> str:
         """

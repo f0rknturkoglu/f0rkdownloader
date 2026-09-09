@@ -71,7 +71,7 @@ class AppLogger:
                         log_file.unlink()
                 except (ValueError, IndexError, OSError):
                     continue
-        except (OSError, IOError):
+        except OSError:
             pass
     
     # ==================== Standard Logging Methods ====================

@@ -1,10 +1,11 @@
 import os
+
+import questionary
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-import questionary
-from src.ui.theme import get_style, get_colors
-from typing import Callable, Any
+
+from src.ui.theme import get_colors, get_style
 
 console = Console()
 
@@ -37,9 +38,9 @@ class Interface:
     def __init__(self):
         self.console = console
         self.breadcrumb: list[str] = []
-        # Varsayılan tema (Turuncu)
-        self.colors = get_colors("orange")
-        self.custom_style = get_style("orange")
+        # Varsayılan tema (Ubuntu)
+        self.colors = get_colors("ubuntu")
+        self.custom_style = get_style("ubuntu")
 
     def clear_screen(self):
         os.system("cls" if os.name == "nt" else "clear")
@@ -89,7 +90,7 @@ class Interface:
         # Banner
         grid.add_row(colored_banner)
         grid.add_row(
-             f"[bold white]PREMIUM DOWNLOADER[/bold white] │ [dim]v2.1[/dim]"
+            "[bold white]PREMIUM DOWNLOADER[/bold white] │ [dim]v2.1[/dim]"
         )
         grid.add_row("")  # Spacer
 
@@ -175,6 +176,7 @@ class Interface:
         """YouTube İşlemleri Menüsü."""
         choices = [
             f"{Icons.DOWNLOAD}  Link ile İndir (Video/Playlist)",
+            f"{Icons.DOWNLOAD}  Toplu İndir (URL Listesi)",
             f"{Icons.SEARCH}  YouTube'da Ara",
             f"{Icons.FOLDER}  Kütüphanemden İndir (Özel Playlistler)",
             f"{Icons.FOLDER}  İndirilenleri Yönet",
@@ -206,15 +208,15 @@ class Interface:
             )
         )
 
-    def show_twitter_progress(self, current: int, total: int, url: str, success: bool, msg: str) -> None:
-        """Show Twitter bulk download progress."""
-        status = f"[green]Tamamlandı[/green]" if success else f"[red]Hata: {msg}[/red]"
+    def show_progress(self, current: int, total: int, url: str, success: bool, msg: str) -> None:
+        """Show bulk download progress."""
+        status = "[green]Tamamlandı[/green]" if success else f"[red]Hata: {msg}[/red]"
         if "Atlandı" in msg:
-            status = f"[yellow]Atlandı[/yellow]"
+            status = "[yellow]Atlandı[/yellow]"
         
         self.console.print(f"[dim][{current}/{total}][/dim] {url[:50]}... -> {status}")
 
-    def show_twitter_summary(self, successful: int, failed: int, failed_urls: list[str], skipped: int = 0) -> None:
+    def show_summary(self, successful: int, failed: int, failed_urls: list[str], skipped: int = 0) -> None:
         """Show summary of bulk download."""
         table = Table(title="İndirme Özeti", show_header=True, header_style="bold magenta")
         table.add_column("Durum", style="dim")
@@ -231,3 +233,7 @@ class Interface:
             self.console.print("\n[red]Hatalı URL'ler:[/red]")
             for f_url in failed_urls:
                 self.console.print(f"- {f_url}")
+
+    # Geriye dönük uyumluluk takma adları
+    show_twitter_progress = show_progress
+    show_twitter_summary = show_summary

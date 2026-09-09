@@ -2,15 +2,12 @@
 Tests for the Download History module.
 """
 
-import json
-import os
+# Add src to path
+import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
-# Add src to path
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.utils.history import DownloadHistory
@@ -187,6 +184,35 @@ class TestDownloadHistoryEdgeCases(unittest.TestCase):
         
         video_id = DownloadHistory.extract_video_id(url, "youtube")
         self.assertEqual(video_id, "test1234567")
+
+    def test_batch_saving(self):
+        """Test auto_save=False does not write immediately until save_history()."""
+        url = "https://www.youtube.com/watch?v=batchvid123"
+        self.history.add_download(url, "youtube", auto_save=False)
+        
+        # File shouldn't contain this url yet if we read raw json
+        new_hist = DownloadHistory(self.test_dir)
+        is_down, _ = new_hist.is_downloaded(url, "youtube")
+        self.assertFalse(is_down)
+        
+        # Now explicitly save
+        self.history.save_history()
+        new_hist_2 = DownloadHistory(self.test_dir)
+        is_down_2, _ = new_hist_2.is_downloaded(url, "youtube")
+        self.assertTrue(is_down_2)
+
+    def test_check_file_exists_fallback(self):
+        """Test fallback file inspection on disk."""
+        platform_dir = Path(self.test_dir) / "YouTube"
+        platform_dir.mkdir(parents=True, exist_ok=True)
+        sample_file = platform_dir / "my_video_sample12345.mp4"
+        sample_file.write_text("dummy")
+
+        hist = DownloadHistory(self.test_dir, platform_paths={"youtube": platform_dir})
+        # URL with video ID in name
+        url = "https://example.com/custom/sample12345"
+        is_down, _ = hist.is_downloaded(url, "youtube")
+        self.assertTrue(is_down)
 
 
 if __name__ == "__main__":

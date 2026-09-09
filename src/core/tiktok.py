@@ -5,18 +5,21 @@ Supports single, bulk, liked videos, and bookmarked downloads.
 Also supports TikTok's official data export (JSON) for liked/favorites.
 """
 
+import concurrent.futures
 import json
 import os
+import threading
 import zipfile
-import subprocess
+from collections.abc import Callable
+from datetime import datetime
 from http.cookiejar import MozillaCookieJar
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+
+import yt_dlp
 
 from src.core.base import (
     DownloaderBase,
-    DownloadError,
-    NetworkError,
     ValidationError,
 )
 from src.utils.history import DownloadHistory
@@ -71,63 +74,6 @@ class TikTokDownloader(DownloaderBase):
         except Exception as e:
             raise ValidationError(f"Dosya okuma hatası: {e}")
 
-    def _build_ytdlp_cmd(self, url: str) -> list[str]:
-        """Build yt-dlp command with options."""
-        cmd = [
-            "yt-dlp",
-            "--quiet",
-            "--no-warnings",
-            "--format", self.config.quality,
-            "--merge-output-format", "mp4",
-            "--output", str(self.tiktok_download_path / "%(title).200s [%(id)s].%(ext)s"),
-            url
-        ]
-
-        if self.config.tiktok_cookies_file:
-            cmd.extend(["--cookies", self.config.tiktok_cookies_file])
-            
-        return cmd
-
-    def _run_ytdlp(
-        self,
-        url: str,
-        progress_callback: Callable[[str], None] | None = None
-    ) -> tuple[bool, str]:
-        """
-        Run yt-dlp for a single URL.
-
-        Returns:
-            Tuple of (success, message)
-            
-        Raises:
-            DownloadError: When yt-dlp not found
-        """
-        cmd = self._build_ytdlp_cmd(url)
-        
-        try:
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
-
-            stdout, stderr = process.communicate()
-
-            if process.returncode == 0:
-                self.history.add_download(url, "tiktok")
-                return True, "Başarıyla indirildi"
-            else:
-                error_msg = stderr.strip() or stdout.strip() or "Bilinmeyen hata"
-                return False, f"Hata: {error_msg}"
-
-        except FileNotFoundError:
-            raise DownloadError("yt-dlp sistemde bulunamadı!")
-        except Exception as e:
-            return False, f"Sistem hatası: {str(e)}"
-
     def download(
         self,
         url: str,
@@ -146,7 +92,26 @@ class TikTokDownloader(DownloaderBase):
             if is_dup:
                 return False, f"Bu video zaten indirilmiş! ({dup_date})"
 
-        return self._run_ytdlp(url)
+        ydl_opts = self.get_base_options()
+        ydl_opts.update({
+            "outtmpl": str(self.tiktok_download_path / "%(title).200s [%(id)s].%(ext)s"),
+        })
+
+        if self.config.tiktok_cookies_file:
+            ydl_opts["cookiefile"] = self.config.tiktok_cookies_file
+
+        if progress_hooks:
+            ydl_opts["progress_hooks"] = progress_hooks
+
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                error_code = ydl.download([url])
+                if error_code == 0:
+                    self.history.add_download(url, "tiktok")
+                    return True, "Başarıyla indirildi"
+                return False, f"yt-dlp hatası (kod: {error_code})"
+        except Exception as e:
+            return False, f"Hata: {e!s}"
 
     def bulk_download(
         self,
@@ -155,7 +120,7 @@ class TikTokDownloader(DownloaderBase):
         skip_duplicates: bool = True,
     ) -> tuple[int, int, int, list[str]]:
         """
-        Download multiple TikTok videos.
+        Download multiple TikTok videos concurrently.
 
         Args:
             urls: List of TikTok URLs to download
@@ -165,40 +130,62 @@ class TikTokDownloader(DownloaderBase):
         Returns:
             Tuple of (successful, failed, skipped, failed_urls)
         """
+        if not urls:
+            return 0, 0, 0, []
+
         successful = 0
         failed = 0
         skipped = 0
         failed_urls = []
+        lock = threading.Lock()
 
         total = len(urls)
-        for i, url in enumerate(urls):
-            current = i + 1
-            
-            if progress_callback:
-                progress_callback(current, total, url, True, "Kontrol ediliyor...")
+        processed = 0
 
+        pending_urls: list[str] = []
+        for url in urls:
             if skip_duplicates:
                 is_dup, _ = self.history.is_downloaded(url, "tiktok")
                 if is_dup:
                     skipped += 1
                     if progress_callback:
-                        progress_callback(current, total, url, True, "Atlandı (Zaten indirilmiş)")
+                        progress_callback(skipped, total, url, True, "Atlandı (Zaten indirilmiş)")
                     continue
+            pending_urls.append(url)
 
-            if progress_callback:
-                progress_callback(current, total, url, True, "İndiriliyor...")
+        max_workers = getattr(self.config, "max_workers", 3)
+        max_workers = max(1, min(max_workers, 5))
 
-            success, message = self.download(url, skip_duplicate_check=True)
-
-            if success:
-                successful += 1
+        def _worker(target_url: str):
+            nonlocal successful, failed, processed
+            curr_idx = 0
+            with lock:
+                processed += 1
+                curr_idx = processed + skipped
                 if progress_callback:
-                    progress_callback(current, total, url, True, "Tamamlandı")
-            else:
-                failed += 1
-                failed_urls.append(f"{url} | {message}")
-                if progress_callback:
-                    progress_callback(current, total, url, False, message)
+                    progress_callback(curr_idx, total, target_url, True, "İndiriliyor...")
+
+            success, message = self.download(target_url, skip_duplicate_check=True)
+
+            with lock:
+                if success:
+                    successful += 1
+                    if progress_callback:
+                        progress_callback(curr_idx, total, target_url, True, "Tamamlandı")
+                else:
+                    failed += 1
+                    failed_urls.append(f"{target_url} | {message}")
+                    if progress_callback:
+                        progress_callback(curr_idx, total, target_url, False, message)
+
+        if max_workers > 1 and len(pending_urls) > 1:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                list(executor.map(_worker, pending_urls))
+        else:
+            for u in pending_urls:
+                _worker(u)
+
+        self.history.save_history()
 
         if failed_urls:
             self._save_failed_urls(failed_urls)
@@ -207,8 +194,9 @@ class TikTokDownloader(DownloaderBase):
 
     def _save_failed_urls(self, failed_urls: list[str]) -> None:
         """Save failed URLs to a text file."""
-        failed_file = self.tiktok_download_path / f"failed_downloads_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
         try:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            failed_file = self.tiktok_download_path / f"failed_downloads_{timestamp}.txt"
             with open(failed_file, "w", encoding="utf-8") as f:
                 f.write("\n".join(failed_urls))
         except Exception:
@@ -443,7 +431,7 @@ class TikTokDownloader(DownloaderBase):
             self.config.tiktok_cookies_file = cookies_file
             return True, ""
 
-        except (OSError, IOError) as e:
+        except OSError as e:
             return False, f"Cookie dosyası okunamadı: {e}"
         except Exception as e:
             return False, f"Cookie parse hatası: {e}"

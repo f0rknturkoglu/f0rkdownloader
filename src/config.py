@@ -3,8 +3,8 @@ Application Configuration
 Handles all app settings with JSON persistence.
 """
 
-import os
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -68,8 +68,8 @@ class Config:
         # Facebook Authentication
         self.facebook_cookies_file: str | None = None
 
-        # Bulk download settings
-        self.bulk_urls_file: str | None = None
+        # Concurrency settings
+        self.max_workers: int = 3
 
         # Theme settings
         self.theme_color: str = "ubuntu"
@@ -93,6 +93,7 @@ class Config:
             "theme_color": self.theme_color,
             "quality": self.quality,
             "format_type": self.format_type,
+            "max_workers": self.max_workers,
             "auth": {
                 "youtube": {
                     "method": self.auth_method,
@@ -117,7 +118,7 @@ class Config:
         try:
             with open(self.config_file_path, 'w', encoding='utf-8') as f:
                 json.dump(settings, f, indent=2, ensure_ascii=False)
-        except (OSError, IOError):
+        except OSError:
             # Silently fail - settings will use defaults
             pass
 
@@ -136,6 +137,7 @@ class Config:
             # Quality/Format
             self.quality = settings.get("quality", self.quality)
             self.format_type = settings.get("format_type", self.format_type)
+            self.max_workers = settings.get("max_workers", self.max_workers)
             
             # Auth settings
             auth = settings.get("auth", {})
@@ -177,7 +179,7 @@ class Config:
             if self.facebook_cookies_file and not Path(self.facebook_cookies_file).exists():
                 self.facebook_cookies_file = None
                 
-        except (json.JSONDecodeError, KeyError, TypeError, OSError, IOError):
+        except (json.JSONDecodeError, KeyError, TypeError, OSError):
             # If config is corrupted, use defaults
             pass
 

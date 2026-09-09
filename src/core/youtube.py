@@ -3,12 +3,16 @@ YouTube Downloader Module
 Handles YouTube video and playlist downloads.
 """
 
+import concurrent.futures
+import glob
 import os
 import shutil
-import glob
-from typing import Any, Callable
+import threading
+from collections.abc import Callable
+from typing import Any
 
 import yt_dlp
+
 from src.core.base import DownloaderBase
 from src.utils.history import DownloadHistory
 
@@ -24,13 +28,21 @@ class YoutubeDownloader(DownloaderBase):
             config.download_path,
             platform_paths={"youtube": self.youtube_path}
         )
+        self._cached_ffmpeg_path: str | None = None
+        self._ffmpeg_searched: bool = False
 
     def _find_ffmpeg(self) -> str | None:
-        """Find ffmpeg binary location."""
+        """Find ffmpeg binary location with caching."""
+        if self._ffmpeg_searched:
+            return self._cached_ffmpeg_path
+
+        self._ffmpeg_searched = True
+
         # Check if ffmpeg is in PATH
         ffmpeg_path = shutil.which("ffmpeg")
         if ffmpeg_path:
-            return os.path.dirname(ffmpeg_path)
+            self._cached_ffmpeg_path = os.path.dirname(ffmpeg_path)
+            return self._cached_ffmpeg_path
 
         # Check WinGet packages folder
         winget_packages = os.path.expanduser(
@@ -40,7 +52,8 @@ class YoutubeDownloader(DownloaderBase):
             pattern = os.path.join(winget_packages, "**", "ffmpeg.exe")
             matches = glob.glob(pattern, recursive=True)
             if matches:
-                return os.path.dirname(matches[0])
+                self._cached_ffmpeg_path = os.path.dirname(matches[0])
+                return self._cached_ffmpeg_path
 
         return None
 
@@ -152,3 +165,83 @@ class YoutubeDownloader(DownloaderBase):
                     return False, f"yt-dlp hatası (kod: {error_code})"
         except Exception as e:
             return False, str(e)
+
+    def read_urls_from_file(self, file_path: str) -> list[str]:
+        """Read YouTube URLs from a text file."""
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Dosya bulunamadı: {file_path}")
+            
+        urls = []
+        with open(file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and ("youtube.com" in line or "youtu.be" in line):
+                    urls.append(line)
+        return urls
+
+    def bulk_download(
+        self,
+        urls: list[str],
+        progress_callback: Callable[[int, int, str, bool, str], None] | None = None,
+        skip_duplicates: bool = True,
+    ) -> tuple[int, int, int, list[str]]:
+        """
+        Download multiple YouTube videos concurrently.
+        
+        Returns:
+            Tuple of (successful, failed, skipped, failed_urls)
+        """
+        successful = 0
+        failed = 0
+        skipped = 0
+        failed_urls: list[str] = []
+        lock = threading.Lock()
+        
+        total = len(urls)
+        processed = 0
+
+        pending_urls: list[str] = []
+        for url in urls:
+            if skip_duplicates and "playlist" not in url.lower():
+                is_dup, dup_date = self.history.is_downloaded(url, "youtube")
+                if is_dup:
+                    skipped += 1
+                    if progress_callback:
+                        progress_callback(skipped, total, url, True, f"Atlandı ({dup_date})")
+                    continue
+            pending_urls.append(url)
+
+        max_workers = getattr(self.config, "max_workers", 3)
+        max_workers = max(1, min(max_workers, 5))
+
+        def _worker(target_url: str):
+            nonlocal successful, failed, processed
+            curr_idx = 0
+            with lock:
+                processed += 1
+                curr_idx = processed + skipped
+                if progress_callback:
+                    progress_callback(curr_idx, total, target_url, True, "İndiriliyor...")
+            
+            success, msg = self.download(target_url, skip_duplicate_check=True)
+            
+            with lock:
+                if success:
+                    successful += 1
+                    if progress_callback:
+                        progress_callback(curr_idx, total, target_url, True, "Tamamlandı")
+                else:
+                    failed += 1
+                    failed_urls.append(f"{target_url} | {msg}")
+                    if progress_callback:
+                        progress_callback(curr_idx, total, target_url, False, msg)
+
+        if max_workers > 1 and len(pending_urls) > 1:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                list(executor.map(_worker, pending_urls))
+        else:
+            for u in pending_urls:
+                _worker(u)
+
+        self.history.save_history()
+        return successful, failed, skipped, failed_urls

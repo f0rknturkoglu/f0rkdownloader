@@ -4,6 +4,7 @@ Handles all Twitter/X-related operations.
 """
 
 from pathlib import Path
+
 from src.controllers.base import BaseController
 from src.core.twitter import TwitterDownloader
 
@@ -23,7 +24,6 @@ class TwitterController(BaseController):
             self.ui.print_header(self.config.download_path)
             self._show_status()
             
-            has_cookies = bool(self.config.twitter_cookies_file)
             import questionary
             choices = [
                 "Tek Link ile İndir",
@@ -99,10 +99,10 @@ class TwitterController(BaseController):
         self.logger.info(f"Starting bookmark download: {len(bookmarks)} items")
         
         successful, failed, skipped, failed_urls = self.downloader.download_bookmarks(
-            progress_callback=self.ui.show_twitter_progress,
+            progress_callback=self.ui.show_progress,
         )
         
-        self.ui.show_twitter_summary(successful, failed, failed_urls, skipped)
+        self.ui.show_summary(successful, failed, failed_urls, skipped)
         self.logger.info(f"Bookmarks complete: success={successful}, failed={failed}, skipped={skipped}")
         self.ui.wait_for_enter()
     
@@ -152,10 +152,10 @@ class TwitterController(BaseController):
             
             successful, failed, skipped, failed_urls = self.downloader.bulk_download(
                 urls,
-                progress_callback=self.ui.show_twitter_progress,
+                progress_callback=self.ui.show_progress,
             )
             
-            self.ui.show_twitter_summary(successful, failed, failed_urls, skipped)
+            self.ui.show_summary(successful, failed, failed_urls, skipped)
             self.logger.info(f"Bulk complete: success={successful}, failed={failed}, skipped={skipped}")
         
         except FileNotFoundError as e:
@@ -170,7 +170,7 @@ class TwitterController(BaseController):
         self.ui.clear_screen()
         
         # Option 1: Universal Script
-        script_path = Path("scripts/universal_video_collector.user.js").absolute()
+        script_path = self.get_resource_path("scripts/universal_video_collector.user.js")
         self.ui.console.print("\n[bold cyan]Seçenek 1: Universal Tampermonkey Script[/bold cyan]")
         self.ui.console.print(
             f"[dim]Dosya Konumu:[/dim] [white]{script_path}[/white]\n"

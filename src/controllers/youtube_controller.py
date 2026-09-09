@@ -4,7 +4,9 @@ Handles all YouTube-related UI operations.
 """
 
 import os
+import sys
 from typing import Any
+
 from src.controllers.base import BaseController
 from src.core.youtube import YoutubeDownloader
 
@@ -30,6 +32,8 @@ class YouTubeController(BaseController):
             try:
                 if "Link ile İndir" in choice:
                     self.handle_single_download()
+                elif "Toplu İndir" in choice:
+                    self.handle_bulk_download()
                 elif "YouTube'da Ara" in choice:
                     self.handle_search()
                 elif "Kütüphanemden İndir" in choice:
@@ -108,7 +112,77 @@ class YouTubeController(BaseController):
 
     def handle_library_download(self) -> None:
         """Handle library/special playlist downloads."""
-        self.ui.show_info("Bu özellik yakında eklenecek.")
+        from src.core.auth import AuthManager
+        auth_mgr = AuthManager(self.config)
+        if not self.config.auth_method:
+            self.ui.show_error("Kütüphanenizdeki playlistleri görmek için önce Hesap İşlemleri menüsünden giriş yapmalısınız.")
+            self.ui.wait_for_enter()
+            return
+            
+        self.ui.console.print("\n[dim]Kütüphane taranıyor...[/dim]")
+        playlists = auth_mgr.get_user_playlists()
+        if not playlists:
+            self.ui.show_warning("Kütüphanenizde oynatma listesi bulunamadı veya oturumunuz geçersiz.")
+            self.ui.wait_for_enter()
+            return
+
+        import questionary
+        choices = [f"{p.get('title', 'İsimsiz')} | {p.get('url', '')}" for p in playlists if p.get('url')]
+        choices.append("Geri Dön")
+        selected = questionary.select(
+            "Hangi playlisti indirmek istersiniz?",
+            choices=choices,
+            style=self.ui.custom_style
+        ).ask()
+        if not selected or selected == "Geri Dön":
+            return
+            
+        idx = choices.index(selected)
+        target_playlist = playlists[idx]
+        self.ui.console.print(f"\n[bold green]Playlist indiriliyor:[/bold green] {target_playlist.get('title')}\n")
+        success, message = self.downloader.download(target_playlist.get('url'))
+        if success:
+            self.ui.show_success(message)
+        else:
+            self.ui.show_error(message)
+        self.ui.wait_for_enter()
+
+    def handle_bulk_download(self) -> None:
+        """Download multiple YouTube videos from file."""
+        import questionary
+        file_path = questionary.text("URL Listesi Dosya Yolu (.txt):", style=self.ui.custom_style).ask()
+        if not file_path:
+            return
+
+        self.ui.print_header(self.config.download_path)
+
+        try:
+            urls = self.downloader.read_urls_from_file(file_path)
+            if not urls:
+                self.ui.show_warning("Dosyada geçerli YouTube URL'si bulunamadı!")
+                self.ui.wait_for_enter()
+                return
+
+            self.ui.console.print(
+                f"\n[bold cyan]Toplu İndirme Başlıyor[/bold cyan]\n"
+                f"[dim]Dosya: {file_path}[/dim]\n"
+                f"[dim]Toplam URL: {len(urls)}[/dim]\n"
+            )
+            self.logger.info(f"YouTube bulk download: {len(urls)} URLs from {file_path}")
+
+            successful, failed, skipped, failed_urls = self.downloader.bulk_download(
+                urls,
+                progress_callback=self.ui.show_progress,
+            )
+
+            self.ui.show_summary(successful, failed, failed_urls, skipped)
+            self.logger.info(f"YouTube bulk complete: success={successful}, failed={failed}, skipped={skipped}")
+
+        except FileNotFoundError as e:
+            self.ui.show_error(str(e))
+        except Exception as e:
+            self.handle_error(e, "YouTube bulk download")
+
         self.ui.wait_for_enter()
 
     def handle_manage_downloads(self) -> None:
@@ -117,7 +191,10 @@ class YouTubeController(BaseController):
         self.ui.show_info(f"İndirilenler burada: {path}")
         if os.name == 'nt':
             os.startfile(path)
-        else:
+        elif sys.platform == 'darwin':
             import subprocess
             subprocess.run(['open', str(path)])
+        else:
+            import subprocess
+            subprocess.run(['xdg-open', str(path)])
         self.ui.wait_for_enter()

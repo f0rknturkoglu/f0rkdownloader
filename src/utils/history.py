@@ -5,17 +5,18 @@ Supports all platforms: YouTube, Twitter, TikTok, Facebook.
 """
 
 import json
-import os
 import re
+import threading
 from datetime import datetime
 from pathlib import Path
+from typing import ClassVar
 
 
 class DownloadHistory:
     """Manages download history to prevent duplicates across all platforms."""
 
     # Supported platforms
-    PLATFORMS = ["youtube", "twitter", "tiktok", "facebook"]
+    PLATFORMS: ClassVar[list[str]] = ["youtube", "twitter", "tiktok", "facebook"]
 
     def __init__(
         self, 
@@ -26,6 +27,7 @@ class DownloadHistory:
         self.history_file = self.base_path / ".download_history.json"
         self.platform_paths = platform_paths or {}
         self._history: dict[str, dict] = {p: {} for p in self.PLATFORMS}
+        self._lock = threading.Lock()
         self._load_history()
 
     def _load_history(self) -> None:
@@ -37,17 +39,22 @@ class DownloadHistory:
                     # Ensure all platforms exist
                     for platform in self.PLATFORMS:
                         self._history[platform] = data.get(platform, {})
-            except (json.JSONDecodeError, OSError, IOError):
+            except (json.JSONDecodeError, OSError):
                 self._history = {p: {} for p in self.PLATFORMS}
 
     def _save_history(self) -> None:
-        """Save history to JSON file."""
+        """Save history to JSON file (internal)."""
         try:
             self.base_path.mkdir(parents=True, exist_ok=True)
             with open(self.history_file, "w", encoding="utf-8") as f:
                 json.dump(self._history, f, indent=2, ensure_ascii=False)
-        except (OSError, IOError):
+        except OSError:
             pass  # Silently fail on save errors
+
+    def save_history(self) -> None:
+        """Save history to JSON file (thread-safe public method)."""
+        with self._lock:
+            self._save_history()
 
     @staticmethod
     def extract_video_id(url: str, platform: str) -> str | None:
@@ -109,10 +116,15 @@ class DownloadHistory:
         
         return None
 
-    def add_download(self, url: str, platform: str) -> bool:
+    def add_download(self, url: str, platform: str, auto_save: bool = True) -> bool:
         """
         Add URL to download history.
         
+        Args:
+            url: The video URL
+            platform: Platform name
+            auto_save: If True, immediately writes to disk. Set False for bulk operations.
+            
         Returns:
             True if added, False if platform not supported
         """
@@ -123,11 +135,13 @@ class DownloadHistory:
         if not video_id:
             return False
             
-        self._history[platform][video_id] = {
-            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "url": url
-        }
-        self._save_history()
+        with self._lock:
+            self._history[platform][video_id] = {
+                "date": datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S"),
+                "url": url
+            }
+            if auto_save:
+                self._save_history()
         return True
 
     def is_downloaded(self, url: str, platform: str) -> tuple[bool, str | None]:
@@ -142,22 +156,38 @@ class DownloadHistory:
             
         video_id = self.extract_video_id(url, platform)
         if not video_id:
-            # If we can't extract ID, check if file exists (fallback)
-            return self._check_file_exists(url, platform), None
+            # If we can't extract ID, check if file exists on disk (fallback)
+            return self._check_file_exists(url, platform, video_id=None), None
             
-        history_entry = self._history[platform].get(video_id)
+        with self._lock:
+            history_entry = self._history[platform].get(video_id)
         if history_entry:
             return True, history_entry["date"]
             
         # Last resort: check if file actually exists in the download folder
-        return self._check_file_exists(url, platform), None
+        return self._check_file_exists(url, platform, video_id=video_id), None
 
-    def _check_file_exists(self, url: str, platform: str) -> bool:
+    def _check_file_exists(self, url: str, platform: str, video_id: str | None = None) -> bool:
         """Check if video file exists on disk (fallback check)."""
         platform_path = self.platform_paths.get(platform)
         if not platform_path or not platform_path.exists():
             return False
             
-        # This is a basic check. Subclasses might have better ways to check.
-        # For now, we rely on the ID history mostly.
+        target_id = video_id or self.extract_video_id(url, platform)
+
+        try:
+            if target_id:
+                for item in platform_path.iterdir():
+                    if item.is_file() and target_id in item.name:
+                        return True
+            else:
+                # If ID cannot be extracted from pattern, check URL slug/filename
+                url_clean = url.split("?")[0].split("#")[0].rstrip("/")
+                slug = Path(url_clean).name
+                if slug and len(slug) >= 5:
+                    for item in platform_path.iterdir():
+                        if item.is_file() and slug in item.name:
+                            return True
+        except OSError:
+            pass
         return False

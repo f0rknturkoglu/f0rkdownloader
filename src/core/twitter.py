@@ -4,13 +4,16 @@ Uses gallery-dl for high-quality Twitter video extraction.
 Supports bookmarks and single tweet downloads.
 """
 
+import concurrent.futures
 import os
+import shutil
 import subprocess
-import json
+import threading
+from collections.abc import Callable
 from http.cookiejar import MozillaCookieJar
-from typing import Any, Callable
+from typing import Any
 
-from src.core.base import DownloaderBase, ValidationError, DownloadError
+from src.core.base import DownloaderBase, ValidationError
 from src.utils.history import DownloadHistory
 
 
@@ -45,12 +48,8 @@ class TwitterDownloader(DownloaderBase):
                 return False, f"Bu tweet zaten indirilmiş! ({dup_date})"
 
         # Check if gallery-dl is installed
-        result = subprocess.run(["which", "gallery-dl"], capture_output=True)
-        if result.returncode != 0:
-            # Fallback check
-            import shutil
-            if not shutil.which("gallery-dl"):
-                return False, "gallery-dl sistemde bulunamadı! Lütfen yükleyin."
+        if not shutil.which("gallery-dl"):
+            return False, "gallery-dl sistemde bulunamadı! Lütfen yükleyin."
 
         # Build command
         cmd = [
@@ -74,7 +73,7 @@ class TwitterDownloader(DownloaderBase):
             else:
                 return False, f"gallery-dl hatası: {result.stderr}"
         except Exception as e:
-            return False, f"Sistem hatası: {str(e)}"
+            return False, f"Sistem hatası: {e!s}"
 
     def get_bookmarks(self) -> list[str]:
         """
@@ -114,36 +113,7 @@ class TwitterDownloader(DownloaderBase):
         urls = self.get_bookmarks()
         if not urls:
             return 0, 0, 0, []
-
-        successful = 0
-        failed = 0
-        skipped = 0
-        failed_urls = []
-
-        total = len(urls)
-        for i, url in enumerate(urls):
-            if progress_callback:
-                progress_callback(i + 1, total, url, True, "İndiriliyor...")
-
-            is_dup, _ = self.history.is_downloaded(url, "twitter")
-            if is_dup:
-                skipped += 1
-                if progress_callback:
-                    progress_callback(i + 1, total, url, True, "Atlandı")
-                continue
-
-            success, msg = self.download(url, skip_duplicate_check=True)
-            if success:
-                successful += 1
-                if progress_callback:
-                    progress_callback(i + 1, total, url, True, "Tamamlandı")
-            else:
-                failed += 1
-                failed_urls.append(f"{url} | {msg}")
-                if progress_callback:
-                    progress_callback(i + 1, total, url, False, msg)
-
-        return successful, failed, skipped, failed_urls
+        return self.bulk_download(urls, progress_callback=progress_callback)
 
     def read_urls_from_file(self, file_path: str) -> list[str]:
         """Read Twitter URLs from a text file."""
@@ -167,29 +137,62 @@ class TwitterDownloader(DownloaderBase):
         urls: list[str],
         progress_callback: Callable[[int, int, str, bool, str], None] | None = None
     ) -> tuple[int, int, int, list[str]]:
-        """Download multiple Twitter URLs."""
+        """Download multiple Twitter URLs concurrently."""
+        if not urls:
+            return 0, 0, 0, []
+
         successful = 0
         failed = 0
         skipped = 0
-        failed_urls = []
+        failed_urls: list[str] = []
+        lock = threading.Lock()
 
         total = len(urls)
-        for i, url in enumerate(urls):
-            if progress_callback:
-                progress_callback(i + 1, total, url, True, "İndiriliyor...")
+        processed = 0
 
+        pending_urls: list[str] = []
+        for url in urls:
             is_dup, _ = self.history.is_downloaded(url, "twitter")
             if is_dup:
                 skipped += 1
+                if progress_callback:
+                    progress_callback(skipped, total, url, True, "Atlandı (Zaten indirilmiş)")
                 continue
+            pending_urls.append(url)
 
-            success, msg = self.download(url, skip_duplicate_check=True)
-            if success:
-                successful += 1
-            else:
-                failed += 1
-                failed_urls.append(f"{url} | {msg}")
+        max_workers = getattr(self.config, "max_workers", 3)
+        max_workers = max(1, min(max_workers, 5))
 
+        def _worker(target_url: str):
+            nonlocal successful, failed, processed
+            curr_idx = 0
+            with lock:
+                processed += 1
+                curr_idx = processed + skipped
+                if progress_callback:
+                    progress_callback(curr_idx, total, target_url, True, "İndiriliyor...")
+
+            success, msg = self.download(target_url, skip_duplicate_check=True)
+
+            with lock:
+                if success:
+                    successful += 1
+                    if progress_callback:
+                        progress_callback(curr_idx, total, target_url, True, "Tamamlandı")
+                else:
+                    failed += 1
+                    failed_urls.append(f"{target_url} | {msg}")
+                    if progress_callback:
+                        progress_callback(curr_idx, total, target_url, False, msg)
+
+        if max_workers > 1 and len(pending_urls) > 1:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                list(executor.map(_worker, pending_urls))
+        else:
+            for u in pending_urls:
+                _worker(u)
+
+        self.history.save_history()
         return successful, failed, skipped, failed_urls
 
     def validate_twitter_cookies(self, cookies_file: str) -> tuple[bool, str]:
@@ -219,7 +222,7 @@ class TwitterDownloader(DownloaderBase):
             self.config.twitter_cookies_file = cookies_file
             return True, ""
 
-        except (OSError, IOError) as e:
+        except OSError as e:
             return False, f"Cookie dosyası okunamadı: {e}"
         except Exception as e:
             return False, f"Cookie parse hatası: {e}"

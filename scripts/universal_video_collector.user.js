@@ -302,8 +302,8 @@
         if (PLATFORM === 'facebook') {
             const patterns = [
                 /\/videos\/(\d+)/,
-                /\/watch\/?\?v=(\d+)/,
-                /\/reel\/(\d+)/,
+                /(?:watch\/?\?(?:.*&)?v=|reel\/)(\d+)/,
+                /[?&]v=(\d+)/,
             ];
             for (const p of patterns) {
                 const m = url.match(p);

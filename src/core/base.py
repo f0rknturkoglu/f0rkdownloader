@@ -4,30 +4,25 @@ Defines the base class and core utilities for all downloaders.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable
-
+from collections.abc import Callable
+from typing import Any
 
 # ==================== Custom Exceptions ====================
 
 class DownloaderError(Exception):
     """Base exception for all downloader errors."""
-    pass
 
 class AuthenticationError(DownloaderError):
     """Raised when authentication fails."""
-    pass
 
 class DownloadError(DownloaderError):
     """Raised when download process fails."""
-    pass
 
 class NetworkError(DownloaderError):
     """Raised when network issues occur."""
-    pass
 
 class ValidationError(DownloaderError):
     """Raised when input validation fails."""
-    pass
 
 
 # ==================== Abstract Base Class ====================
@@ -65,7 +60,6 @@ class DownloaderBase(ABC):
         Returns:
             Tuple of (success_status, message)
         """
-        pass
 
     def get_base_options(self) -> dict[str, Any]:
         """Get common yt-dlp options based on config."""
@@ -74,6 +68,9 @@ class DownloaderBase(ABC):
             "quiet": True,
             "no_warnings": True,
             "ignoreerrors": True,
+            "socket_timeout": 30,
+            "retries": 5,
+            "file_access_retries": 3,
             "merge_output_format": "mp4",
             "postprocessors": [
                 {

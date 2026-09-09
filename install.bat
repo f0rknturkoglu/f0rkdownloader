@@ -1,4 +1,5 @@
 @echo off
+@chcp 65001 >nul
 title f0rkn_d0wnl0ader Kurulum
 
 echo.

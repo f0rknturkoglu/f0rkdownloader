@@ -4,6 +4,7 @@ Handles application configuration UI.
 """
 
 from typing import Any
+
 from src.controllers.base import BaseController
 
 
@@ -25,6 +26,7 @@ class SettingsController(BaseController):
                 f"Tema Değiştir ({self.config.theme_color})",
                 f"Video Kalitesi ({self.config.get_quality_display()})",
                 f"İndirme Formatı ({self.config.format_type.upper()})",
+                f"Eşzamanlı İndirme ({self.config.max_workers} İş Parçacığı)",
                 "Ayarları Sıfırla",
                 "Geri Dön"
             ]
@@ -44,6 +46,8 @@ class SettingsController(BaseController):
                 self.handle_quality()
             elif "Format" in choice:
                 self.handle_format()
+            elif "Eşzamanlı" in choice:
+                self.handle_max_workers()
             elif "Sıfırla" in choice:
                 self.handle_reset()
                 
@@ -52,7 +56,7 @@ class SettingsController(BaseController):
     def handle_theme(self) -> None:
         """Change application theme."""
         import questionary
-        themes = ["orange", "blue", "green", "purple", "ubuntu", "crimson"]
+        themes = ["ubuntu", "macintosh", "fedora"]
         theme = questionary.select(
             "Tema seçin:",
             choices=themes,
@@ -91,6 +95,28 @@ class SettingsController(BaseController):
         if fmt:
             self.config.set_format(fmt)
             self.config.save()
+
+    def handle_max_workers(self) -> None:
+        """Change concurrent worker count."""
+        import questionary
+        choices = [
+            "1 (Sıralı / Tek Tek)",
+            "2 (Dengeli)",
+            "3 (Varsayılan Hızlı)",
+            "5 (Maksimum Performans)",
+        ]
+        worker_choice = questionary.select(
+            "Eşzamanlı indirilecek video sayısı:",
+            choices=choices,
+            style=self.ui.custom_style
+        ).ask()
+        
+        if worker_choice:
+            num = int(worker_choice.split()[0])
+            self.config.max_workers = num
+            self.config.save()
+            self.ui.show_success(f"Eşzamanlı indirme {num} iş parçacığı olarak ayarlandı.")
+            self.ui.wait_for_enter()
 
     def handle_reset(self) -> None:
         """Reset settings to default."""

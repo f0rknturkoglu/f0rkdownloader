@@ -19,7 +19,7 @@ echo [OK] PyInstaller hazir
 
 echo.
 echo [2/3] EXE olusturuluyor...
-pyinstaller --onefile --name "f0rkn_d0wnl0ader" --console --add-data "src;src" --hidden-import "yt_dlp" --hidden-import "yt_dlp_ejs" --hidden-import "gallery_dl" --hidden-import "rich" --hidden-import "rich._unicode_data" --hidden-import "questionary" --hidden-import "pycryptodomex" --hidden-import "brotli" --collect-all "yt_dlp" --collect-all "gallery_dl" --collect-all "rich" main.py
+pyinstaller --onefile --name "f0rkn_d0wnl0ader" --console --add-data "src;src" --add-data "scripts;scripts" --hidden-import "yt_dlp" --hidden-import "yt_dlp_ejs" --hidden-import "gallery_dl" --hidden-import "rich" --hidden-import "rich._unicode_data" --hidden-import "questionary" --hidden-import "pycryptodomex" --hidden-import "brotli" --collect-all "yt_dlp" --collect-all "gallery_dl" --collect-all "rich" main.py
 
 if errorlevel 1 (
     echo [HATA] Build basarisiz!

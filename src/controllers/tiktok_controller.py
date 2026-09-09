@@ -6,6 +6,7 @@ Handles all TikTok-related UI operations.
 import os
 from pathlib import Path
 from typing import Any
+
 from src.controllers.base import BaseController
 from src.core.tiktok import TikTokDownloader
 
@@ -90,14 +91,14 @@ class TikTokController(BaseController):
         if not file_path:
             return
             
-        self.ui.console.print(f"\n[bold cyan]Toplu İndirme Başlatılıyor...[/bold cyan]\n")
+        self.ui.console.print("\n[bold cyan]Toplu İndirme Başlatılıyor...[/bold cyan]\n")
         
         successful, failed, skipped, failed_urls = self.downloader.bulk_download_from_file(
             file_path, 
-            progress_callback=self.ui.show_twitter_progress # Reusing UI method
+            progress_callback=self.ui.show_progress
         )
         
-        self.ui.show_twitter_summary(successful, failed, failed_urls, skipped)
+        self.ui.show_summary(successful, failed, failed_urls, skipped)
         self.ui.wait_for_enter()
 
     def handle_liked(self) -> None:
@@ -107,14 +108,14 @@ class TikTokController(BaseController):
         if not file_path:
             return
             
-        self.ui.console.print(f"\n[bold cyan]Beğenilen Videolar İndiriliyor...[/bold cyan]\n")
+        self.ui.console.print("\n[bold cyan]Beğenilen Videolar İndiriliyor...[/bold cyan]\n")
         
         successful, failed, skipped, failed_urls = self.downloader.download_liked_videos(
             file_path,
-            progress_callback=self.ui.show_twitter_progress
+            progress_callback=self.ui.show_progress
         )
         
-        self.ui.show_twitter_summary(successful, failed, failed_urls, skipped)
+        self.ui.show_summary(successful, failed, failed_urls, skipped)
         self.ui.wait_for_enter()
 
     def handle_favorites(self) -> None:
@@ -124,14 +125,14 @@ class TikTokController(BaseController):
         if not file_path:
             return
             
-        self.ui.console.print(f"\n[bold cyan]Favori Videolar İndiriliyor...[/bold cyan]\n")
+        self.ui.console.print("\n[bold cyan]Favori Videolar İndiriliyor...[/bold cyan]\n")
         
         successful, failed, skipped, failed_urls = self.downloader.download_bookmarked_videos(
             file_path,
-            progress_callback=self.ui.show_twitter_progress
+            progress_callback=self.ui.show_progress
         )
         
-        self.ui.show_twitter_summary(successful, failed, failed_urls, skipped)
+        self.ui.show_summary(successful, failed, failed_urls, skipped)
         self.ui.wait_for_enter()
 
     def handle_show_script(self) -> None:
@@ -139,7 +140,7 @@ class TikTokController(BaseController):
         self.ui.clear_screen()
         
         # Option 1: Universal Script
-        script_path = Path("scripts/universal_video_collector.user.js").absolute()
+        script_path = self.get_resource_path("scripts/universal_video_collector.user.js")
         self.ui.console.print("\n[bold magenta]Seçenek 1: Universal Tampermonkey Script[/bold magenta]")
         self.ui.console.print(
             f"[dim]Dosya Konumu:[/dim] [white]{script_path}[/white]\n"
@@ -177,8 +178,8 @@ class TikTokController(BaseController):
             
         successful, failed, skipped, failed_urls = self.downloader.bulk_download(
             urls,
-            progress_callback=self.ui.show_twitter_progress
+            progress_callback=self.ui.show_progress
         )
         
-        self.ui.show_twitter_summary(successful, failed, failed_urls, skipped)
+        self.ui.show_summary(successful, failed, failed_urls, skipped)
         self.ui.wait_for_enter()

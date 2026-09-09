@@ -85,6 +85,9 @@ class Application:
     def shutdown(self) -> None:
         """Clean up and exit application."""
         self.logger.info("Application shutting down")
+        fb_controller = self.controllers.get("facebook")
+        if fb_controller and hasattr(fb_controller, "downloader"):
+            fb_controller.downloader.close_selenium()
         self.ui.clear_screen()
         print("\n\n" + " " * 20 + "Görüşmek üzere!\n\n")
         sys.exit(0)

@@ -2,15 +2,13 @@
 Tests for the Config module.
 """
 
-import json
-import os
+# Add src to path
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-# Add src to path
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.config import Config
@@ -56,6 +54,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(config.theme_color, "ubuntu")
         self.assertEqual(config.format_type, "video")
         self.assertEqual(config.quality, "bestvideo+bestaudio/best")
+        self.assertEqual(config.max_workers, 3)
         self.assertIsNone(config.auth_method)
         self.assertIsNone(config.cookies_file)
     
@@ -67,6 +66,7 @@ class TestConfig(unittest.TestCase):
         config.theme_color = "macintosh"
         config.format_type = "audio"
         config.twitter_username = "testuser"
+        config.max_workers = 5
         
         # Save
         config.save()
@@ -78,6 +78,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(new_config.theme_color, "macintosh")
         self.assertEqual(new_config.format_type, "audio")
         self.assertEqual(new_config.twitter_username, "testuser")
+        self.assertEqual(new_config.max_workers, 5)
     
     def test_set_quality(self):
         """Test quality setting."""

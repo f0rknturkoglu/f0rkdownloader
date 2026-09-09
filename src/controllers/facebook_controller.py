@@ -5,6 +5,7 @@ Handles all Facebook-related UI operations.
 
 from pathlib import Path
 from typing import Any
+
 from src.controllers.base import BaseController
 from src.core.facebook import FacebookDownloader
 
@@ -20,41 +21,40 @@ class FacebookController(BaseController):
         """Main Facebook menu loop."""
         self.ui.push_breadcrumb("Facebook")
         
-        while True:
-            self.ui.print_header(self.config.download_path)
-            
-            import questionary
-            choices = [
-                "Tek Video İndir",
-                "Toplu İndir (URL Listesi)",
-                "URL Çıkarma Scriptleri",
-                "Geri Dön"
-            ]
-            
-            choice = questionary.select(
-                "Facebook İşlemleri:",
-                choices=choices,
-                style=self.ui.custom_style
-            ).ask()
-            
-            if not choice or "Geri Dön" in choice:
-                break
-            
-            try:
-                if "Tek Video" in choice:
-                    self.handle_single()
-                elif "Toplu İndir" in choice:
-                    self.handle_bulk()
-                elif "URL Çıkarma" in choice:
-                    self.show_extractor_script()
-            except Exception as e:
-                self.handle_error(e, "Facebook operation")
-        
-        # Cleanup
-        if self.downloader.driver:
-            self.downloader.close_selenium()
+        try:
+            while True:
+                self.ui.print_header(self.config.download_path)
                 
-        self.ui.pop_breadcrumb()
+                import questionary
+                choices = [
+                    "Tek Video İndir",
+                    "Toplu İndir (URL Listesi)",
+                    "URL Çıkarma Scriptleri",
+                    "Geri Dön"
+                ]
+                
+                choice = questionary.select(
+                    "Facebook İşlemleri:",
+                    choices=choices,
+                    style=self.ui.custom_style
+                ).ask()
+                
+                if not choice or "Geri Dön" in choice:
+                    break
+                
+                try:
+                    if "Tek Video" in choice:
+                        self.handle_single()
+                    elif "Toplu İndir" in choice:
+                        self.handle_bulk()
+                    elif "URL Çıkarma" in choice:
+                        self.show_extractor_script()
+                except Exception as e:
+                    self.handle_error(e, "Facebook operation")
+        finally:
+            if self.downloader.driver:
+                self.downloader.close_selenium()
+            self.ui.pop_breadcrumb()
 
     def handle_single(self) -> None:
         """Download a single Facebook video."""
@@ -84,14 +84,14 @@ class FacebookController(BaseController):
         if not file_path:
             return
             
-        self.ui.console.print(f"\n[bold cyan]Toplu İndirme Başlatılıyor...[/bold cyan]\n")
+        self.ui.console.print("\n[bold cyan]Toplu İndirme Başlatılıyor...[/bold cyan]\n")
         
-        successful, failed, failed_urls, skipped = self.downloader.download_bulk(
+        successful, failed, skipped, failed_urls = self.downloader.download_bulk(
             file_path,
-            progress_callback=self.ui.show_twitter_progress # Reusing summary logic
+            progress_callback=self.ui.show_progress
         )
         
-        self.ui.show_twitter_summary(successful, failed, failed_urls, skipped)
+        self.ui.show_summary(successful, failed, failed_urls, skipped)
         self.ui.wait_for_enter()
 
     def show_extractor_script(self) -> None:
@@ -99,7 +99,7 @@ class FacebookController(BaseController):
         self.ui.clear_screen()
         
         # Method 1: Universal UserScript
-        script_path = Path("scripts/universal_video_collector.user.js").absolute()
+        script_path = self.get_resource_path("scripts/universal_video_collector.user.js")
         
         self.ui.console.print("\n[bold cyan]Seçenek 1: Tampermonkey Script (Tavsiye Edilen)[/bold cyan]")
         self.ui.console.print(

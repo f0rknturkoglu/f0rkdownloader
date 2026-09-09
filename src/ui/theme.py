@@ -7,7 +7,7 @@ from questionary import Style
 THEMES = {
     "ubuntu": {
         "primary": "orange1",        # Ubuntu Orange
-        "secondary": "purple",       # Canonical Aubergine
+        "secondary": "bright_magenta", # Accessible Canonical Aubergine/Violet
         "hex": "#E95420",
         "success": "green",
         "error": "red",
@@ -22,9 +22,9 @@ THEMES = {
         "warning": "yellow"
     },
     "fedora": {
-        "primary": "blue",           # Fedora Blue
-        "secondary": "bright_blue",  # Lighter Blue
-        "hex": "#294172",
+        "primary": "bright_blue",    # Fedora Clear Blue (High contrast)
+        "secondary": "cyan",         # Accent Cyan
+        "hex": "#5180D8",            # Accessible Fedora Blue
         "success": "green",
         "error": "red",
         "warning": "yellow"
@@ -48,7 +48,7 @@ def get_style(theme_name="ubuntu"):
         ("highlighted", f"fg:{color} bold"),
         ("selected", f"fg:{color}"),
         ("separator", "fg:#6C6C6C"),
-        ("instruction", "fg:#454545 italic"),
+        ("instruction", "fg:#8A8A8A italic"),
         ("text", ""),
         ("disabled", "fg:#858585 italic"),
     ])

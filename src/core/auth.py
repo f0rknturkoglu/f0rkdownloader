@@ -1,4 +1,5 @@
 import os
+
 import yt_dlp
 from rich.console import Console
 
@@ -46,7 +47,7 @@ class AuthManager:
             return False
 
         self.console.print(
-            f"[yellow]Cookie dosyası kontrol ediliyor...[/yellow]"
+            "[yellow]Cookie dosyası kontrol ediliyor...[/yellow]"
         )
 
         url = "https://www.youtube.com/feed/playlists"
@@ -142,8 +143,7 @@ class AuthManager:
                     return True
                 else:
                     return False
-        except Exception as e:
-            # self.console.print(f"[dim]Hata detayı: {e}[/dim]")
+        except Exception:
             return False
 
     def logout(self):
