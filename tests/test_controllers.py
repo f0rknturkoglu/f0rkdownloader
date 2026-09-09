@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.config import Config
+from src.controllers.account_controller import AccountController
 from src.controllers.base import BaseController
 from src.controllers.settings_controller import SettingsController
 
@@ -39,6 +40,9 @@ class TestControllers(unittest.TestCase):
         self.ui = MagicMock()
         self.base_ctrl = ConcreteController(self.config, self.ui)
         self.settings_ctrl = SettingsController(self.config, self.ui)
+        self.account_ctrl = AccountController(self.config, self.ui)
+        self.account_ctrl.auth_manager.console = MagicMock()
+
 
     def tearDown(self):
         import shutil
@@ -89,6 +93,85 @@ class TestControllers(unittest.TestCase):
         self.assertEqual(self.config.theme_color, "ubuntu")
         self.ui.show_success.assert_called_once()
         self.ui.wait_for_enter.assert_called_once()
+
+    def test_find_cookie_files_empty(self):
+        """Test finding cookie files in empty directory returns empty list."""
+        empty_dir = Path(self.test_dir) / "empty_folder"
+        empty_dir.mkdir()
+        results = self.base_ctrl.find_cookie_files(search_dirs=[empty_dir])
+        self.assertEqual(results, [])
+
+    def test_find_cookie_files_detected(self):
+        """Test finding cookie files by filename matching."""
+        downloads_dir = Path(self.test_dir) / "Downloads"
+        downloads_dir.mkdir()
+        cookie1 = downloads_dir / "cookies.txt"
+        cookie1.write_text("dummy", encoding="utf-8")
+        cookie2 = downloads_dir / "twitter_cookies.txt"
+        cookie2.write_text("dummy", encoding="utf-8")
+        unrelated = downloads_dir / "notes.txt"
+        unrelated.write_text("some random note", encoding="utf-8")
+
+        results = self.base_ctrl.find_cookie_files(search_dirs=[downloads_dir])
+        self.assertEqual(len(results), 2)
+        names = [r.name for r in results]
+        self.assertIn("cookies.txt", names)
+        self.assertIn("twitter_cookies.txt", names)
+        self.assertNotIn("notes.txt", names)
+
+    def test_find_cookie_files_netscape_content(self):
+        """Test finding cookie files by Netscape header content."""
+        downloads_dir = Path(self.test_dir) / "Downloads_Netscape"
+        downloads_dir.mkdir()
+        unnamed_cookie = downloads_dir / "export_data.txt"
+        unnamed_cookie.write_text("# Netscape HTTP Cookie File\n.google.com TRUE / FALSE 0 SID 123", encoding="utf-8")
+
+        results = self.base_ctrl.find_cookie_files(search_dirs=[downloads_dir])
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].name, "export_data.txt")
+
+    def test_prompt_cookie_file_select_detected(self):
+        """Test prompt_cookie_file selecting detected file from menu."""
+        downloads_dir = Path(self.test_dir) / "Downloads_Prompt"
+        downloads_dir.mkdir()
+        cookie_file = downloads_dir / "cookies.txt"
+        cookie_file.write_text("dummy", encoding="utf-8")
+
+        with patch("questionary.select") as mock_select:
+            mock_select.return_value.ask.side_effect = lambda: mock_select.call_args[1]["choices"][0]
+            chosen = self.base_ctrl.prompt_cookie_file("YouTube", search_dirs=[downloads_dir])
+            self.assertEqual(chosen, str(cookie_file))
+
+
+    def test_prompt_cookie_file_manual(self):
+        """Test prompt_cookie_file falls back to manual entry."""
+        empty_dir = Path(self.test_dir) / "Empty_Prompt"
+        empty_dir.mkdir()
+
+        with patch("questionary.text") as mock_text:
+            mock_text.return_value.ask.return_value = "/manual/path/cookies.txt"
+            chosen = self.base_ctrl.prompt_cookie_file("YouTube", search_dirs=[empty_dir])
+            self.assertEqual(chosen, "/manual/path/cookies.txt")
+
+    def test_account_controller_auto_scan_empty(self):
+        """Test handle_auto_scan_and_connect when no cookies exist."""
+        with patch.object(self.account_ctrl, "find_cookie_files", return_value=[]):
+            self.account_ctrl.handle_auto_scan_and_connect()
+            self.ui.show_error.assert_called_once()
+            self.ui.wait_for_enter.assert_called_once()
+
+    def test_account_controller_auto_scan_success(self):
+        """Test handle_auto_scan_and_connect when a cookie file exists."""
+        cookie_file = Path(self.test_dir) / "cookies.txt"
+        cookie_file.write_text("# Netscape HTTP Cookie File", encoding="utf-8")
+
+        with (
+            patch.object(self.account_ctrl, "find_cookie_files", return_value=[cookie_file]),
+            patch.object(self.account_ctrl, "_apply_universal_cookies") as mock_apply
+        ):
+            self.account_ctrl.handle_auto_scan_and_connect()
+            mock_apply.assert_called_once_with(str(cookie_file))
+
 
 
 if __name__ == "__main__":

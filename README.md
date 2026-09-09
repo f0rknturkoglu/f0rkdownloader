@@ -4,7 +4,7 @@
 
 ![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
 [![CI](https://github.com/f0rknturkoglu/f0rkdownloader/actions/workflows/ci.yml/badge.svg)](https://github.com/f0rknturkoglu/f0rkdownloader/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/Tests-91%2F91%20Passing-brightgreen?logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/Tests-98%2F98%20Passing-brightgreen?logo=pytest&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
 ![Architecture](https://img.shields.io/badge/Architecture-MVC%20Modular-orange)
@@ -189,19 +189,20 @@ f0rkdownloader/
 
 ---
 
-## 🔑 Kimlik Doğrulama (Cookie Yönetimi)
+## 🔑 Kimlik Doğrulama (Otomatik Cookie Taraması)
 
-Özel oynatma listeleri, TikTok favorileri, Twitter yer imleri veya gizli Facebook videoları için oturum açılması gerekir.
+Özel oynatma listeleri, TikTok favorileri, Twitter yer imleri veya gizli Facebook videoları için oturum açılması gerekir. **Elle dosya yolu girmeye gerek yoktur;** uygulama İndirilenler (`~/Downloads`) klasörünüzü otomatik olarak tarar!
 
-### Cookie Dosyası Nasıl Alınır?
+### ⚡ Otomatik Cookie Yükleme (Önerilen)
 1. Tarayıcınıza güvenilir bir Netscape cookie eklentisi kurun:
    - Chrome / Brave / Edge: **Get cookies.txt LOCALLY**
    - Firefox: **cookies.txt**
-2. İlgili sosyal medya platformunda oturum açın.
-3. Eklentiye tıklayarak çerezleri dışa aktarın (`.txt` dosyası olarak kaydedin).
-4. Uygulamada **"Hesap İşlemleri"** menüsüne girin:
-   - **Tek Dosya ile Toplu Giriş:** Tüm sitelerin çerezlerini tek dosyada export ettiyseniz tek tıkla tüm platformlar için oturum açar.
-   - **Platform Bazlı Giriş:** İlgili platformu seçip `.txt` dosyasının yolunu gösterin.
+2. İlgili sosyal medya platformunda oturum açıp eklentiyle çerezleri indirin (dosya doğrudan `İndirilenler` klasörünüze kaydedilir).
+3. Uygulamada **"Hesap İşlemleri"** menüsüne girin:
+   - **⚡ İndirilenler Klasörünü Tara ve Otomatik Bağla (TEK TIK):** En güncel cookie dosyasını tespit eder, YouTube, Twitter, TikTok ve Facebook için geçerliliğini test eder ve hepsini tek tıkla bağlar.
+   - **Seçimli / Platform Bazlı Giriş:** İndirilenler klasöründeki tespit edilen cookie dosyaları tarih/saat ve boyutlarıyla listelenir; yön tuşlarıyla seçip hemen onaylayabilirsiniz.
+   - **Manuel Giriş:** İsteğe bağlı olarak farklı bir dizindeki dosya yolunu elle de girebilirsiniz.
+
 
 ---
 
@@ -243,7 +244,7 @@ Tüm kullanıcı verileri ve indirilen içerikler varsayılan olarak kullanıcı
 
 ## 🧪 Testler ve CI/CD İşlem Hattı
 
-Uygulamanın tüm modülleri, uç senaryoları ve iş parçacığı güvenliği **91 adet kapsamlı birim test** ile doğrulanmaktadır:
+Uygulamanın tüm modülleri, uç senaryoları ve iş parçacığı güvenliği **98 adet kapsamlı birim test** ile doğrulanmaktadır:
 
 - `test_config.py`: Konfigürasyon yükleme, kaydetme, sıfırlama ve doğrulama (10 test)
 - `test_history.py`: İndirme geçmişi, video ID çıkarımı ve eşzamanlı disk kontrolü (16 test)
@@ -251,7 +252,7 @@ Uygulamanın tüm modülleri, uç senaryoları ve iş parçacığı güvenliği 
 - `test_auth.py`: Çerez dosyası, tarayıcı çerezleri ve playlist yönetimi (14 test)
 - `test_theme.py`: Renk şemaları, WCAG AA erişilebilirlik ve tema yedekleri (5 test)
 - `test_base_core.py`: İndirici temel seçenekleri ve özel hata hiyerarşisi (4 test)
-- `test_controllers.py`: Kontrolcü hata yakalama ve interaktif ayar eylemleri (6 test)
+- `test_controllers.py`: Otomatik cookie taraması, kontrolcü hata yakalama ve ayar eylemleri (13 test)
 - `test_downloaders.py`: Platform motorları, önbellek ve UI bileşenleri (31 test)
 
 ```bash
@@ -261,9 +262,9 @@ python -m unittest discover -s tests -v
 
 **Test Çıktısı:**
 ```text
-Ran 91 tests in 0.396s
+Ran 98 tests in 0.540s
 
-OK (91/91 Başarılı)
+OK (98/98 Başarılı)
 ```
 
 ### 🚀 Sürekli Entegrasyon (CI/CD)

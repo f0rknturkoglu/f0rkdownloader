@@ -35,7 +35,8 @@ class AccountController(BaseController):
             
             import questionary
             choices = [
-                "Tek Cookie Dosyası ile Tümünü Bağla (ÖNERİLEN)",
+                "⚡ İndirilenler Klasörünü Tara ve Otomatik Bağla (TEK TIK)",
+                "Tek Cookie Dosyası ile Tümünü Bağla (Seçimli)",
                 "YouTube Bağlantısı (Cookies/Browser)",
                 "Twitter Bağlantısı (Cookies)",
                 "TikTok Bağlantısı (Cookies)",
@@ -52,7 +53,9 @@ class AccountController(BaseController):
             if not choice or "Geri Dön" in choice:
                 break
             
-            if "Tek Cookie" in choice:
+            if "Otomatik Tara" in choice:
+                self.handle_auto_scan_and_connect()
+            elif "Tek Cookie" in choice:
                 self.handle_universal_auth()
             elif "YouTube" in choice:
                 self.handle_youtube_auth()
@@ -65,16 +68,40 @@ class AccountController(BaseController):
                 
         self.ui.pop_breadcrumb()
 
+    def handle_auto_scan_and_connect(self) -> None:
+        """Automatically scan Downloads for the most recent cookie file and bind all platforms."""
+        self.ui.console.print("\n[bold cyan]⚡ İndirilenler klasörü taranıyor...[/bold cyan]\n")
+        detected = self.find_cookie_files()
+        
+        if not detected:
+            self.ui.show_error("İndirilenler klasöründe cookie dosyası (*cookie*.txt) bulunamadı!")
+            self.ui.console.print("[dim]Tarayıcınızdan 'Get cookies.txt LOCALLY' eklentisiyle çerezleri indirdiğinizden (.txt) emin olun.[/dim]")
+            self.ui.wait_for_enter()
+            return
+            
+        best_file = str(detected[0])
+        self.ui.console.print(f"[green]✓ En güncel cookie dosyası tespit edildi:[/green] [bold white]{detected[0].name}[/bold white]")
+        self.ui.console.print(f"[dim]Konum: {best_file}[/dim]\n")
+        
+        self._apply_universal_cookies(best_file)
+
     def handle_universal_auth(self) -> None:
         """Handle setting a single cookie file for all platforms."""
-        import questionary
         self.ui.console.print("\n[bold yellow]Bu mod tek bir Netscape formatındaki cookie dosyasını tüm platformlar için kullanır.[/bold yellow]\n")
         
-        file_path = questionary.text("Cookie dosyası yolu (.txt):", style=self.ui.custom_style).ask()
-        if not file_path or not os.path.exists(file_path):
+        file_path = self.prompt_cookie_file(platform_name="Tüm Platformlar")
+        if not file_path:
+            return
+            
+        if not os.path.exists(file_path):
             self.ui.show_error("Dosya bulunamadı!")
+            self.ui.wait_for_enter()
             return
 
+        self._apply_universal_cookies(file_path)
+
+    def _apply_universal_cookies(self, file_path: str) -> None:
+        """Validate and apply a cookie file to all platforms."""
         results = []
         
         # 1. YouTube
@@ -113,11 +140,12 @@ class AccountController(BaseController):
         # Save and Report
         self.config.save()
         
-        self.ui.console.print("\n[bold cyan]Sonuçlar:[/bold cyan]")
+        self.ui.console.print("\n[bold cyan]Bağlantı Sonuçları:[/bold cyan]")
         for res in results:
             self.ui.console.print(res)
             
         self.ui.wait_for_enter()
+
 
     def handle_youtube_auth(self) -> None:
         """Handle YouTube authentication settings."""
@@ -152,28 +180,37 @@ class AccountController(BaseController):
                     self.ui.show_warning(f"{browser} tarayıcısından aktif YouTube oturumu bulunamadı, ancak ayar kaydedildi.")
         
         else:
-            file_path = questionary.text("Cookie dosyası yolu (.txt):", style=self.ui.custom_style).ask()
-            if file_path and os.path.exists(file_path):
-                valid = self.auth_manager.validate_cookies_file(file_path)
-                if valid:
-                    self.config.save()
-                    ch = f" ({self.config.channel_name})" if self.config.channel_name else ""
-                    self.ui.show_success(f"YouTube cookie dosyası doğrulandı{ch}!")
-                else:
-                    self.config.auth_method = "cookies_file"
-                    self.config.cookies_file = file_path
-                    self.config.save()
-                    self.ui.show_success("YouTube cookie dosyası kaydedildi.")
+            file_path = self.prompt_cookie_file(platform_name="YouTube", keyword="youtube")
+            if not file_path:
+                return
+            if not os.path.exists(file_path):
+                self.ui.show_error("Dosya bulunamadı!")
+                self.ui.wait_for_enter()
+                return
+
+            valid = self.auth_manager.validate_cookies_file(file_path)
+            if valid:
+                self.config.save()
+                ch = f" ({self.config.channel_name})" if self.config.channel_name else ""
+                self.ui.show_success(f"YouTube cookie dosyası doğrulandı{ch}!")
             else:
-                self.ui.show_error("Geçersiz dosya yolu.")
+                self.config.auth_method = "cookies_file"
+                self.config.cookies_file = file_path
+                self.config.save()
+                self.ui.show_success("YouTube cookie dosyası kaydedildi.")
         
         self.ui.wait_for_enter()
 
     def handle_twitter_auth(self) -> None:
         """Handle Twitter authentication via cookies."""
         import questionary
-        file_path = questionary.text("Twitter Cookie dosyası yolu (.txt):", style=self.ui.custom_style).ask()
+        file_path = self.prompt_cookie_file(platform_name="Twitter/X", keyword="twitter")
         if not file_path:
+            return
+            
+        if not os.path.exists(file_path):
+            self.ui.show_error("Dosya bulunamadı!")
+            self.ui.wait_for_enter()
             return
             
         success, msg = self.tw_downloader.validate_twitter_cookies(file_path)
@@ -193,8 +230,13 @@ class AccountController(BaseController):
     def handle_tiktok_auth(self) -> None:
         """Handle TikTok authentication via cookies."""
         import questionary
-        file_path = questionary.text("TikTok Cookie dosyası yolu (.txt):", style=self.ui.custom_style).ask()
+        file_path = self.prompt_cookie_file(platform_name="TikTok", keyword="tiktok")
         if not file_path:
+            return
+            
+        if not os.path.exists(file_path):
+            self.ui.show_error("Dosya bulunamadı!")
+            self.ui.wait_for_enter()
             return
             
         success, msg = self.tt_downloader.validate_tiktok_cookies(file_path)
@@ -213,9 +255,13 @@ class AccountController(BaseController):
 
     def handle_facebook_auth(self) -> None:
         """Handle Facebook authentication via cookies."""
-        import questionary
-        file_path = questionary.text("Facebook Cookie dosyası yolu (.txt):", style=self.ui.custom_style).ask()
+        file_path = self.prompt_cookie_file(platform_name="Facebook", keyword="facebook")
         if not file_path:
+            return
+            
+        if not os.path.exists(file_path):
+            self.ui.show_error("Dosya bulunamadı!")
+            self.ui.wait_for_enter()
             return
             
         success, msg = self.fb_downloader.validate_facebook_cookies(file_path)
@@ -229,3 +275,4 @@ class AccountController(BaseController):
             self.logger.auth_event("facebook", False, "cookies")
             
         self.ui.wait_for_enter()
+
