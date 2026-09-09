@@ -88,15 +88,18 @@ class TestYoutubeDownloader(BaseDownloaderTestCase):
 
     def test_find_ffmpeg_caching(self):
         downloader = YoutubeDownloader(self.config)
-        with patch("shutil.which", return_value="C:\\ffmpeg\\bin\\ffmpeg.exe") as mock_which:
+        fake_ffmpeg = str(Path(self.test_dir) / "bin" / "ffmpeg")
+        expected_dir = str(Path(self.test_dir) / "bin")
+        with patch("shutil.which", return_value=fake_ffmpeg) as mock_which:
             path1 = downloader._find_ffmpeg()
-            self.assertEqual(path1, "C:\\ffmpeg\\bin")
+            self.assertEqual(path1, expected_dir)
             self.assertEqual(mock_which.call_count, 1)
 
             # Second call should use cache, call_count should still be 1
             path2 = downloader._find_ffmpeg()
-            self.assertEqual(path2, "C:\\ffmpeg\\bin")
+            self.assertEqual(path2, expected_dir)
             self.assertEqual(mock_which.call_count, 1)
+
 
     def test_read_urls_from_file(self):
         downloader = YoutubeDownloader(self.config)
@@ -378,9 +381,12 @@ class TestBaseController(unittest.TestCase):
         self.assertTrue(str(p).endswith("universal_video_collector.user.js"))
 
     def test_get_resource_path_pyinstaller(self):
-        with patch.object(sys, "_MEIPASS", "C:\\temp\\mock_meipass", create=True):
+        mock_meipass = str(Path(tempfile.gettempdir()) / "mock_meipass")
+        with patch.object(sys, "_MEIPASS", mock_meipass, create=True):
             p = BaseController.get_resource_path("scripts/test.js")
-            self.assertEqual(str(p), "C:\\temp\\mock_meipass\\scripts\\test.js")
+            expected = Path(mock_meipass) / "scripts/test.js"
+            self.assertEqual(p, expected)
+
 
 
 if __name__ == "__main__":

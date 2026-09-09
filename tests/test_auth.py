@@ -30,6 +30,8 @@ class TestAuthManager(unittest.TestCase):
         self.config._set_defaults()
         self.config._create_directories()
         self.auth = AuthManager(self.config)
+        self.auth.console = MagicMock()
+
 
     def tearDown(self):
         import shutil
