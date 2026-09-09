@@ -320,16 +320,44 @@ class TestTikTokDownloader(BaseDownloaderTestCase):
             self.assertEqual(skipped, 0)
             self.assertEqual(failed_urls, [])
 
+    def test_normalize_tiktok_url(self):
+        downloader = TikTokDownloader(self.config)
+        # Direct URL without @username
+        norm1 = downloader.normalize_url("https://www.tiktok.com/video/7618739710869032213")
+        self.assertEqual(norm1, "https://www.tiktok.com/@video/video/7618739710869032213")
+
+        # URL with @username
+        norm2 = downloader.normalize_url("https://www.tiktok.com/@user/video/7618739710869032213")
+        self.assertEqual(norm2, "https://www.tiktok.com/@user/video/7618739710869032213")
+
+        # URL with tracking parameters
+        norm3 = downloader.normalize_url("https://www.tiktok.com/video/7618739710869032213?is_from_webapp=1")
+        self.assertEqual(norm3, "https://www.tiktok.com/@video/video/7618739710869032213")
+
+    def test_download_gallery_dl_fallback_on_ytdlp_fail(self):
+        downloader = TikTokDownloader(self.config)
+        with patch("yt_dlp.YoutubeDL") as mock_ydl_cls:
+            mock_ydl = MagicMock()
+            mock_ydl.download.side_effect = Exception("yt-dlp anti-bot")
+            mock_ydl_cls.return_value.__enter__.return_value = mock_ydl
+
+            with patch.object(downloader, "_download_with_gallery_dl", return_value=(True, "gallery-dl success")) as mock_gdl:
+                success, msg = downloader.download("https://www.tiktok.com/@user/video/999")
+                self.assertTrue(success)
+                self.assertIn("gallery-dl", msg)
+                mock_gdl.assert_called_once()
+
     def test_download_error_handling(self):
         downloader = TikTokDownloader(self.config)
         with patch("yt_dlp.YoutubeDL") as mock_ydl_cls:
             mock_ydl = MagicMock()
-            mock_ydl.download.side_effect = Exception("TikTok fail")
+            mock_ydl.download.side_effect = Exception("yt-dlp fail")
             mock_ydl_cls.return_value.__enter__.return_value = mock_ydl
 
-            success, msg = downloader.download("https://www.tiktok.com/@user/video/999")
-            self.assertFalse(success)
-            self.assertIn("Hata", msg)
+            with patch.object(downloader, "_download_with_gallery_dl", return_value=(False, "gallery-dl fail")):
+                success, msg = downloader.download("https://www.tiktok.com/@user/video/999")
+                self.assertFalse(success)
+                self.assertIn("hata", msg.lower())
 
 
 

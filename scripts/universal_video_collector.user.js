@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         f0rkn Universal Video Collector
 // @namespace    https://github.com/f0rknturkoglu
-// @version      2.0.0
+// @version      2.0.1
 // @description  YouTube, TikTok, Facebook ve Twitter/X video URL'lerini akıllıca toplar. Virtual DOM desteği, video filtresi ve f0rkn_d0wnl0ader CLI entegrasyonu sunar.
 // @author       f0rknturkoglu
 // @match        https://www.youtube.com/*
@@ -530,7 +530,7 @@
             return `https://www.youtube.com/watch?v=${id}`;
         }
         if (PLATFORM === 'tiktok') {
-            return `https://www.tiktok.com/video/${id}`;
+            return `https://www.tiktok.com/@video/video/${id}`;
         }
         if (PLATFORM === 'facebook') {
             return `https://www.facebook.com/watch/?v=${id}`;

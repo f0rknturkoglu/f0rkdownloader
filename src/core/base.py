@@ -91,3 +91,29 @@ class DownloaderBase(ABC):
                 }
             ],
         }
+
+    @staticmethod
+    def find_executable(name: str) -> str | None:
+        """
+        Locate executable in system PATH, active virtualenv, or python script folders.
+        """
+        import shutil
+        import sys
+        from pathlib import Path
+
+        found = shutil.which(name)
+        if found:
+            return found
+
+        candidates = [
+            Path(sys.prefix) / "Scripts" / f"{name}.exe",
+            Path(sys.prefix) / "Scripts" / name,
+            Path(sys.prefix) / "bin" / name,
+            Path(sys.executable).parent / f"{name}.exe",
+            Path(sys.executable).parent / name,
+        ]
+        for c in candidates:
+            if c.is_file():
+                return str(c)
+        return None
+

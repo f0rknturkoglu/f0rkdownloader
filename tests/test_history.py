@@ -61,6 +61,7 @@ class TestDownloadHistory(unittest.TestCase):
         test_cases = [
             ("https://www.tiktok.com/@user/video/7123456789012345678", "7123456789012345678"),
             ("https://tiktok.com/@user/video/7123456789012345678?lang=en", "7123456789012345678"),
+            ("https://www.tiktok.com/video/7123456789012345678", "7123456789012345678"),
         ]
         
         for url, expected_id in test_cases:

@@ -49,12 +49,13 @@ class TwitterDownloader(DownloaderBase):
                 return False, f"Bu tweet zaten indirilmiş! ({dup_date})"
 
         # Check if gallery-dl is installed
-        if not shutil.which("gallery-dl"):
+        gallery_dl_bin = self.find_executable("gallery-dl")
+        if not gallery_dl_bin:
             return False, "gallery-dl sistemde bulunamadı! Lütfen yükleyin."
 
         # Build command
         cmd = [
-            "gallery-dl",
+            gallery_dl_bin,
             "--directory", str(self.twitter_download_path),
             "--filename", "{category}_{id}_{num}.{extension}",
             url
@@ -84,9 +85,13 @@ class TwitterDownloader(DownloaderBase):
         if not self.config.twitter_cookies_file:
             return []
 
+        gallery_dl_bin = self.find_executable("gallery-dl")
+        if not gallery_dl_bin:
+            return []
+
         # gallery-dl command to list bookmark URLs
         cmd = [
-            "gallery-dl",
+            gallery_dl_bin,
             "--cookies", self.config.twitter_cookies_file,
             "--get-urls",
             "https://twitter.com/i/bookmarks"

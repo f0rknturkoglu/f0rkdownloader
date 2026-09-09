@@ -8,6 +8,8 @@ Also supports TikTok's official data export (JSON) for liked/favorites.
 import concurrent.futures
 import json
 import os
+import re
+import subprocess
 import threading
 import zipfile
 from collections.abc import Callable
@@ -43,9 +45,56 @@ class TikTokDownloader(DownloaderBase):
         """Check if URL is a valid TikTok URL."""
         return any(domain in url for domain in self.SUPPORTED_DOMAINS)
 
+    @classmethod
+    def normalize_url(cls, url: str) -> str:
+        """
+        Normalize TikTok URLs to canonical standard format.
+        Direct URLs like 'tiktok.com/video/<id>' (without @user) cause TikTok
+        web router to redirect to '/404?fromUrl=...' when fetched by download engines.
+        Rewriting to 'https://www.tiktok.com/@video/video/<id>' allows both yt-dlp
+        and gallery-dl to extract and download the video reliably.
+        """
+        if not url:
+            return url
+        url = url.strip()
+        clean_url = url.split("?")[0].rstrip("/")
+        # Check if URL contains /video/<digits> without any username (@...)
+        match = re.search(r"tiktok\.com/video/(\d+)", clean_url)
+        if match:
+            video_id = match.group(1)
+            return f"https://www.tiktok.com/@video/video/{video_id}"
+        return clean_url
+
+    def _download_with_gallery_dl(self, url: str) -> tuple[bool, str]:
+        """
+        Fallback downloader for TikTok using gallery-dl.
+        """
+        gallery_dl_path = self.find_executable("gallery-dl")
+        if not gallery_dl_path:
+            return False, "gallery-dl sistemde bulunamadı"
+
+        cmd = [
+            gallery_dl_path,
+            "--directory", str(self.tiktok_download_path),
+            "--filename", "{id}_{title[:100]}.{extension}",
+            url
+        ]
+        if self.config.tiktok_cookies_file and os.path.exists(self.config.tiktok_cookies_file):
+            cmd.extend(["--cookies", self.config.tiktok_cookies_file])
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            if result.returncode == 0:
+                return True, "gallery-dl ile başarıyla indirildi"
+            return False, f"gallery-dl hatası (kod: {result.returncode}): {result.stderr.strip()[:150]}"
+        except subprocess.TimeoutExpired:
+            return False, "gallery-dl zaman aşımına uğradı (120s)"
+        except Exception as e:
+            return False, f"gallery-dl çalıştırma hatası: {e!s}"
+
     def read_urls_from_file(self, file_path: str) -> list[str]:
         """
-        Read TikTok URLs from a text file.
+        Read TikTok URLs from a text file and normalize them.
         
         Args:
             file_path: Path to the file containing URLs
@@ -78,10 +127,9 @@ class TikTokDownloader(DownloaderBase):
                 for line in f:
                     url = line.strip()
                     if url and self.is_tiktok_url(url):
-                        # Clean URL (remove query params)
-                        clean_url = url.split("?")[0]
-                        if clean_url not in urls:
-                            urls.append(clean_url)
+                        norm_url = self.normalize_url(url)
+                        if norm_url not in urls:
+                            urls.append(norm_url)
             return urls
         except Exception as e:
             raise ValidationError(f"Dosya okuma hatası: {e}")
@@ -93,11 +141,13 @@ class TikTokDownloader(DownloaderBase):
         skip_duplicate_check: bool = False
     ) -> tuple[bool, str]:
         """
-        Download a single TikTok video using yt-dlp.
+        Download a single TikTok video using yt-dlp with gallery-dl fallback.
 
         Returns:
             Tuple of (success, message)
         """
+        url = self.normalize_url(url)
+
         # Duplicate check
         if not skip_duplicate_check:
             is_dup, dup_date = self.history.is_downloaded(url, "tiktok")
@@ -109,21 +159,30 @@ class TikTokDownloader(DownloaderBase):
             "outtmpl": str(self.tiktok_download_path / "%(title).200s [%(id)s].%(ext)s"),
         })
 
-        if self.config.tiktok_cookies_file:
+        if self.config.tiktok_cookies_file and os.path.exists(self.config.tiktok_cookies_file):
             ydl_opts["cookiefile"] = self.config.tiktok_cookies_file
 
         if progress_hooks:
             ydl_opts["progress_hooks"] = progress_hooks
 
+        ytdlp_msg = ""
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 error_code = ydl.download([url])
                 if error_code == 0:
                     self.history.add_download(url, "tiktok")
                     return True, "Başarıyla indirildi"
-                return False, f"yt-dlp hatası (kod: {error_code})"
+                ytdlp_msg = f"yt-dlp hatası (kod: {error_code})"
         except Exception as e:
-            return False, f"Hata: {e!s}"
+            ytdlp_msg = f"yt-dlp hatası: {e!s}"
+
+        # Otomatik motor yedeği (Fallback): gallery-dl
+        gdl_success, gdl_msg = self._download_with_gallery_dl(url)
+        if gdl_success:
+            self.history.add_download(url, "tiktok")
+            return True, "Başarıyla indirildi (gallery-dl fallback)"
+
+        return False, f"{ytdlp_msg} | {gdl_msg}"
 
     def bulk_download(
         self,
@@ -154,6 +213,7 @@ class TikTokDownloader(DownloaderBase):
         total = len(urls)
         processed = 0
 
+        urls = [self.normalize_url(u) for u in urls if u]
         pending_urls: list[str] = []
         for url in urls:
             if skip_duplicates:

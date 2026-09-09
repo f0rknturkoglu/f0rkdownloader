@@ -92,6 +92,7 @@ class DownloadHistory:
             # TikTok video ID patterns
             patterns = [
                 r"tiktok\.com/@[\w.-]+/video/(\d+)",  # Standard format
+                r"tiktok\.com/video/(\d+)",            # Direct video format
                 r"vm\.tiktok\.com/(\w+)",              # Short URL
                 r"tiktok\.com/t/(\w+)",                # Another short format
             ]
