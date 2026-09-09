@@ -6,10 +6,11 @@ questionary>=2.0.0
 requests>=2.31.0
 gallery-dl>=1.26.0
 
-# Crypto dependencies for yt-dlp
+# Crypto and impersonation dependencies for yt-dlp
 pycryptodomex>=3.20.0
 brotli>=1.1.0
 websockets>=12.0
+curl_cffi>=0.7.0
 
 # Selenium (for Facebook)
 selenium>=4.15.0

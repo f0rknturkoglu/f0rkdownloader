@@ -8,9 +8,11 @@ Also supports TikTok's official data export (JSON) for liked/favorites.
 import concurrent.futures
 import json
 import os
+import random
 import re
 import subprocess
 import threading
+import time
 import zipfile
 from collections.abc import Callable
 from datetime import datetime
@@ -176,6 +178,10 @@ class TikTokDownloader(DownloaderBase):
         except Exception as e:
             ytdlp_msg = f"yt-dlp hatası: {e!s}"
 
+        # Hassas / 18+ içerik kontrolü
+        if "Log in for access" in ytdlp_msg or "comfortable for some audiences" in ytdlp_msg:
+            return False, "Hassas/18+ video: İndirmek için TikTok oturum çerezi (cookies.txt) gerekiyor."
+
         # Otomatik motor yedeği (Fallback): gallery-dl
         gdl_success, gdl_msg = self._download_with_gallery_dl(url)
         if gdl_success:
@@ -236,6 +242,9 @@ class TikTokDownloader(DownloaderBase):
                 curr_idx = processed + skipped
                 if progress_callback:
                     progress_callback(curr_idx, total, target_url, True, "İndiriliyor...")
+
+            if max_workers > 1:
+                time.sleep(random.uniform(0.2, 0.5))
 
             success, message = self.download(target_url, skip_duplicate_check=True)
 

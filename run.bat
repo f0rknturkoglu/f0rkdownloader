@@ -2,7 +2,7 @@
 @chcp 65001 >nul
 title f0rkn_d0wnl0ader
 
-set "PATH=%PATH%;%USERPROFILE%\.deno\bin"
+set "PATH=%~dp0.venv\Scripts;%PATH%;%USERPROFILE%\.deno\bin"
 
 for /d %%D in ("%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg*") do (
     for /d %%F in ("%%D\ffmpeg-*\bin") do (
