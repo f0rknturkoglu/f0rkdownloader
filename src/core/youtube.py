@@ -89,6 +89,12 @@ class YoutubeDownloader(DownloaderBase):
             "no_warnings": True,
             "extract_flat": True,
             "default_search": "ytsearch",
+            "js_runtimes": {
+                "node": {},
+                "deno": {},
+                "bun": {},
+                "quickjs": {},
+            },
         }
         ydl_opts = self._add_auth_options(ydl_opts)
 
@@ -162,8 +168,35 @@ class YoutubeDownloader(DownloaderBase):
                         self.history.add_download(url, "youtube")
                     return True, "İndirme başarılı!"
                 else:
+                    # If cookies caused failure or bot challenge, retry anonymously
+                    if "cookiefile" in ydl_opts or "cookiesfrombrowser" in ydl_opts:
+                        fallback_opts = dict(ydl_opts)
+                        fallback_opts.pop("cookiefile", None)
+                        fallback_opts.pop("cookiesfrombrowser", None)
+                        try:
+                            with yt_dlp.YoutubeDL(fallback_opts) as fb_ydl:
+                                fb_code = fb_ydl.download([url])
+                                if fb_code == 0:
+                                    if "playlist" not in url.lower():
+                                        self.history.add_download(url, "youtube")
+                                    return True, "İndirme başarılı! (Çerez koruması aşılarak anonim modda tamamlandı)"
+                        except Exception:
+                            pass
                     return False, f"yt-dlp hatası (kod: {error_code})"
         except Exception as e:
+            if "cookiefile" in ydl_opts or "cookiesfrombrowser" in ydl_opts:
+                fallback_opts = dict(ydl_opts)
+                fallback_opts.pop("cookiefile", None)
+                fallback_opts.pop("cookiesfrombrowser", None)
+                try:
+                    with yt_dlp.YoutubeDL(fallback_opts) as fb_ydl:
+                        fb_code = fb_ydl.download([url])
+                        if fb_code == 0:
+                            if "playlist" not in url.lower():
+                                self.history.add_download(url, "youtube")
+                            return True, "İndirme başarılı! (Çerez koruması aşılarak anonim modda tamamlandı)"
+                except Exception:
+                    pass
             return False, str(e)
 
     def read_urls_from_file(self, file_path: str) -> list[str]:

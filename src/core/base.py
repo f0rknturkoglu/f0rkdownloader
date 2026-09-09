@@ -72,6 +72,12 @@ class DownloaderBase(ABC):
             "retries": 5,
             "file_access_retries": 3,
             "merge_output_format": "mp4",
+            "js_runtimes": {
+                "node": {},
+                "deno": {},
+                "bun": {},
+                "quickjs": {},
+            },
             "postprocessors": [
                 {
                     "key": "FFmpegVideoConvertor",

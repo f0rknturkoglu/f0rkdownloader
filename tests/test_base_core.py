@@ -82,6 +82,15 @@ class TestBaseCore(unittest.TestCase):
         self.assertEqual(opts["postprocessors"][0]["preferredcodec"], "mp3")
         self.assertEqual(opts["postprocessors"][0]["preferredquality"], "192")
 
+    def test_get_base_options_js_runtimes(self):
+        """Test that js_runtimes are configured for challenge solving."""
+        opts = self.downloader.get_base_options()
+        self.assertIn("js_runtimes", opts)
+        self.assertIn("node", opts["js_runtimes"])
+        self.assertIn("deno", opts["js_runtimes"])
+        self.assertIn("bun", opts["js_runtimes"])
+        self.assertIn("quickjs", opts["js_runtimes"])
+
 
 if __name__ == "__main__":
     unittest.main()

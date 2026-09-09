@@ -157,6 +157,46 @@ class TestYoutubeDownloader(BaseDownloaderTestCase):
             self.assertEqual(skipped, 1)
             self.assertTrue(any(urls[1] in f for f in failed_urls))
 
+    def test_download_fallback_without_cookies_on_error_code(self):
+        """Test that cookie-authenticated failure triggers anonymous fallback."""
+        self.config.auth_method = "cookies_file"
+        self.config.cookies_file = "dummy_cookies.txt"
+        downloader = YoutubeDownloader(self.config)
+
+        mock_ydl_with_cookie = MagicMock()
+        mock_ydl_with_cookie.download.return_value = 1  # Code 1 (e.g. page reload error)
+
+        mock_ydl_fallback = MagicMock()
+        mock_ydl_fallback.download.return_value = 0  # Fallback succeeds
+
+        with patch("yt_dlp.YoutubeDL", side_effect=[
+            MagicMock(__enter__=MagicMock(return_value=mock_ydl_with_cookie)),
+            MagicMock(__enter__=MagicMock(return_value=mock_ydl_fallback)),
+        ]):
+            success, msg = downloader.download("https://www.youtube.com/watch?v=12345678901")
+            self.assertTrue(success)
+            self.assertIn("anonim modda", msg)
+
+    def test_download_fallback_without_cookies_on_exception(self):
+        """Test that cookie-authenticated exception triggers anonymous fallback."""
+        self.config.auth_method = "cookies_file"
+        self.config.cookies_file = "dummy_cookies.txt"
+        downloader = YoutubeDownloader(self.config)
+
+        mock_ydl_with_cookie = MagicMock()
+        mock_ydl_with_cookie.download.side_effect = Exception("The page needs to be reloaded.")
+
+        mock_ydl_fallback = MagicMock()
+        mock_ydl_fallback.download.return_value = 0
+
+        with patch("yt_dlp.YoutubeDL", side_effect=[
+            MagicMock(__enter__=MagicMock(return_value=mock_ydl_with_cookie)),
+            MagicMock(__enter__=MagicMock(return_value=mock_ydl_fallback)),
+        ]):
+            success, msg = downloader.download("https://www.youtube.com/watch?v=12345678901")
+            self.assertTrue(success)
+            self.assertIn("anonim modda", msg)
+
 
 
 
