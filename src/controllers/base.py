@@ -6,7 +6,7 @@ Defines the base class for all UI controllers.
 import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Optional
 
 from src.utils.logger import get_logger
 
@@ -304,7 +304,14 @@ class BaseController(ABC):
                     "URL listesi tam dosya yolu (.txt):",
                     style=self.ui.custom_style
                 ).ask()
-                return manual_path.strip() if manual_path else None
+                if not manual_path:
+                    return None
+                mp = Path(manual_path.strip().strip('"').strip("'"))
+                if mp.is_dir():
+                    sub = self.find_url_list_files(keyword, search_dirs=[mp])
+                    if sub:
+                        return str(sub[0])
+                return str(mp)
 
             # Find chosen path
             for idx, choice_label in enumerate(choices[:len(detected[:8])]):
@@ -316,6 +323,58 @@ class BaseController(ABC):
                 f"{platform_name} URL Listesi Dosya Yolu (.txt):",
                 style=self.ui.custom_style
             ).ask()
-            return manual_path.strip() if manual_path else None
+            if not manual_path:
+                return None
+            clean_path = manual_path.strip().strip('"').strip("'")
+            mp = Path(clean_path)
+            if mp.is_dir():
+                sub = self.find_url_list_files(keyword, search_dirs=[mp])
+                if sub:
+                    return str(sub[0])
+            return clean_path
+
+    def auto_scan_and_bulk_download(
+        self,
+        platform_name: str,
+        keyword: str,
+        bulk_download_func: Callable[[str], None]
+    ) -> None:
+        """
+        1-Click Auto Scan: Automatically finds the newest URL list in Downloads or system paths
+        and starts the bulk download process immediately without manual path entry.
+        """
+        import questionary
+
+        detected = self.find_url_list_files(keyword)
+        if not detected:
+            self.ui.console.print(
+                f"\n[yellow]ℹ İndirilenler klasöründe {platform_name} için otomatik URL listesi bulunamadı.[/yellow]"
+            )
+            manual_path = questionary.text(
+                f"{platform_name} URL Listesi Dosya Yolu (.txt):",
+                style=self.ui.custom_style
+            ).ask()
+            if not manual_path:
+                return
+            manual_p = Path(manual_path.strip().strip('"').strip("'"))
+            if manual_p.is_dir():
+                found_in_dir = self.find_url_list_files(keyword, search_dirs=[manual_p])
+                if found_in_dir:
+                    file_path = str(found_in_dir[0])
+                else:
+                    self.ui.show_error(f"Belirtilen klasörde {platform_name} URL listesi (.txt) bulunamadı: {manual_path}")
+                    self.ui.wait_for_enter()
+                    return
+            else:
+                file_path = str(manual_p)
+        else:
+            target_file = detected[0]
+            self.ui.console.print(
+                f"\n[bold green]⚡ İndirilenler klasöründeki en güncel {platform_name} listesi otomatik bağlandı:[/bold green]\n"
+                f"[cyan]Dosya:[/cyan] {target_file.name} [dim]({target_file})[/dim]\n"
+            )
+            file_path = str(target_file)
+
+        bulk_download_func(file_path)
 
 

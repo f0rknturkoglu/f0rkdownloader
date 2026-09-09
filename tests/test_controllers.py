@@ -237,7 +237,36 @@ class TestControllers(unittest.TestCase):
             chosen = self.base_ctrl.prompt_url_list_file("YouTube", search_dirs=[empty_dir])
             self.assertEqual(chosen, "/manual/path/urls.txt")
 
+    def test_auto_scan_and_bulk_download_found(self):
+        """Test auto_scan_and_bulk_download finds file automatically."""
+        urls_dir = Path(self.test_dir) / "AutoScan_Found"
+        urls_dir.mkdir()
+        target_file = urls_dir / "f0rkn_tiktok_urls_2026-09-10.txt"
+        target_file.write_text("https://www.tiktok.com/@user/video/111\n", encoding="utf-8")
+
+        mock_bulk = MagicMock()
+        with patch.object(self.base_ctrl, "find_url_list_files", return_value=[target_file]):
+            self.base_ctrl.auto_scan_and_bulk_download("TikTok", "tiktok", mock_bulk)
+            mock_bulk.assert_called_once_with(str(target_file))
+
+    def test_auto_scan_and_bulk_download_manual_directory(self):
+        """Test auto_scan_and_bulk_download handles directory entered manually."""
+        urls_dir = Path(self.test_dir) / "AutoScan_ManualDir"
+        urls_dir.mkdir()
+        target_file = urls_dir / "f0rkn_tiktok_urls_manual.txt"
+        target_file.write_text("https://www.tiktok.com/@user/video/222\n", encoding="utf-8")
+
+        mock_bulk = MagicMock()
+        with patch.object(self.base_ctrl, "find_url_list_files") as mock_find:
+            # First call (auto scan) returns empty list, second call (inside dir) returns target_file
+            mock_find.side_effect = [[], [target_file]]
+            with patch("questionary.text") as mock_text:
+                mock_text.return_value.ask.return_value = str(urls_dir)
+                self.base_ctrl.auto_scan_and_bulk_download("TikTok", "tiktok", mock_bulk)
+                mock_bulk.assert_called_once_with(str(target_file))
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

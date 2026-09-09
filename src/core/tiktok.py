@@ -60,6 +60,18 @@ class TikTokDownloader(DownloaderBase):
         if not path.exists():
             raise ValidationError(f"Dosya bulunamadı: {file_path}")
 
+        if path.is_dir():
+            candidates = sorted(
+                path.glob("*.txt"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True
+            )
+            valid_txt = [c for c in candidates if "cookie" not in c.name.lower()]
+            if valid_txt:
+                path = valid_txt[0]
+            else:
+                raise ValidationError(f"Belirtilen klasörde geçerli bir .txt URL listesi bulunamadı: {file_path}")
+
         urls = []
         try:
             with open(path, "r", encoding="utf-8") as f:

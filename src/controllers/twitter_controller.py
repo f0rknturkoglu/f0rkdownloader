@@ -27,7 +27,8 @@ class TwitterController(BaseController):
             import questionary
             choices = [
                 "Tek Link ile İndir",
-                "Toplu İndir (Dosyadan)",
+                "⚡ İndirilenler Klasörünü Tara ve Toplu İndir (TEK TIK)",
+                "Toplu İndir (URL Listesi Seçmeli)",
                 "Bookmarks İndir (Profil)",
                 "URL Çıkarma Scriptleri",
                 "Geri Dön"
@@ -47,6 +48,8 @@ class TwitterController(BaseController):
                     self.handle_bookmarks()
                 elif "Tek Link" in choice:
                     self.handle_single()
+                elif "Tara ve Toplu İndir" in choice:
+                    self.handle_auto_scan()
                 elif "Toplu İndir" in choice:
                     self.handle_bulk()
                 elif "URL Çıkarma" in choice:
@@ -132,12 +135,8 @@ class TwitterController(BaseController):
         
         self.ui.wait_for_enter()
     
-    def handle_bulk(self) -> None:
-        """Download multiple Twitter videos from file."""
-        file_path = self.prompt_url_list_file("Twitter/X", keyword="twitter")
-        if not file_path:
-            return
-        
+    def _execute_bulk(self, file_path: str) -> None:
+        """Execute bulk download from given file path."""
         self.ui.print_header(self.config.download_path)
         
         try:
@@ -161,8 +160,21 @@ class TwitterController(BaseController):
             self.ui.show_error(str(e))
         except ValueError as e:
             self.ui.show_error(str(e))
+        except Exception as e:
+            self.handle_error(e, "Twitter bulk download")
         
         self.ui.wait_for_enter()
+
+    def handle_auto_scan(self) -> None:
+        """1-Click scan Downloads folder and download Twitter videos."""
+        self.auto_scan_and_bulk_download("Twitter/X", "twitter", self._execute_bulk)
+
+    def handle_bulk(self) -> None:
+        """Download multiple Twitter videos from file with picker."""
+        file_path = self.prompt_url_list_file("Twitter/X", keyword="twitter")
+        if not file_path:
+            return
+        self._execute_bulk(file_path)
 
     def handle_show_script(self) -> None:
         """Show Twitter URL extraction options."""

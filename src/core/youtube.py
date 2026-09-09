@@ -9,6 +9,7 @@ import os
 import shutil
 import threading
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import yt_dlp
@@ -201,11 +202,24 @@ class YoutubeDownloader(DownloaderBase):
 
     def read_urls_from_file(self, file_path: str) -> list[str]:
         """Read YouTube URLs from a text file."""
-        if not os.path.exists(file_path):
+        path = Path(file_path)
+        if not path.exists():
             raise FileNotFoundError(f"Dosya bulunamadı: {file_path}")
-            
+
+        if path.is_dir():
+            candidates = sorted(
+                path.glob("*.txt"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True
+            )
+            valid_txt = [c for c in candidates if "cookie" not in c.name.lower()]
+            if valid_txt:
+                path = valid_txt[0]
+            else:
+                raise FileNotFoundError(f"Belirtilen klasörde geçerli bir .txt URL listesi bulunamadı: {file_path}")
+
         urls = []
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line and ("youtube.com" in line or "youtu.be" in line):

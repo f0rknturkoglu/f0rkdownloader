@@ -176,7 +176,8 @@ class Interface:
         """YouTube İşlemleri Menüsü."""
         choices = [
             f"{Icons.DOWNLOAD}  Link ile İndir (Video/Playlist)",
-            f"{Icons.DOWNLOAD}  Toplu İndir (URL Listesi)",
+            f"⚡  İndirilenler Klasörünü Tara ve Toplu İndir (TEK TIK)",
+            f"{Icons.DOWNLOAD}  Toplu İndir (URL Listesi Seçmeli)",
             f"{Icons.SEARCH}  YouTube'da Ara",
             f"{Icons.FOLDER}  Kütüphanemden İndir (Özel Playlistler)",
             f"{Icons.FOLDER}  İndirilenleri Yönet",

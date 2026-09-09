@@ -32,6 +32,8 @@ class YouTubeController(BaseController):
             try:
                 if "Link ile İndir" in choice:
                     self.handle_single_download()
+                elif "Tara ve Toplu İndir" in choice:
+                    self.handle_auto_scan()
                 elif "Toplu İndir" in choice:
                     self.handle_bulk_download()
                 elif "YouTube'da Ara" in choice:
@@ -147,12 +149,8 @@ class YouTubeController(BaseController):
             self.ui.show_error(message)
         self.ui.wait_for_enter()
 
-    def handle_bulk_download(self) -> None:
-        """Download multiple YouTube videos from file."""
-        file_path = self.prompt_url_list_file("YouTube", keyword="youtube")
-        if not file_path:
-            return
-
+    def _execute_bulk(self, file_path: str) -> None:
+        """Execute bulk download from given file path."""
         self.ui.print_header(self.config.download_path)
 
         try:
@@ -183,6 +181,17 @@ class YouTubeController(BaseController):
             self.handle_error(e, "YouTube bulk download")
 
         self.ui.wait_for_enter()
+
+    def handle_auto_scan(self) -> None:
+        """1-Click scan Downloads folder and download YouTube videos."""
+        self.auto_scan_and_bulk_download("YouTube", "youtube", self._execute_bulk)
+
+    def handle_bulk_download(self) -> None:
+        """Download multiple YouTube videos with picker."""
+        file_path = self.prompt_url_list_file("YouTube", keyword="youtube")
+        if not file_path:
+            return
+        self._execute_bulk(file_path)
 
     def handle_manage_downloads(self) -> None:
         """Open download folder."""

@@ -291,11 +291,24 @@ class FacebookDownloader(DownloaderBase):
         progress_callback: Callable[[int, int, str, bool, str], None] | None = None
     ) -> tuple[int, int, int, list[str]]:
         """Bulk download from file."""
-        if not os.path.exists(file_path):
+        path = Path(file_path)
+        if not path.exists():
             return 0, 0, 0, []
-            
+
+        if path.is_dir():
+            candidates = sorted(
+                path.glob("*.txt"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True
+            )
+            valid_txt = [c for c in candidates if "cookie" not in c.name.lower()]
+            if valid_txt:
+                path = valid_txt[0]
+            else:
+                return 0, 0, 0, []
+
         try:
-            with open(file_path, 'r') as f:
+            with open(path, 'r', encoding='utf-8') as f:
                 urls = [line.strip() for line in f if line.strip()]
         except OSError:
             return 0, 0, 0, []

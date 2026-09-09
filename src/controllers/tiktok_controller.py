@@ -28,7 +28,8 @@ class TikTokController(BaseController):
             import questionary
             choices = [
                 "Tek Video İndir",
-                "Toplu İndir (URL Listesi)",
+                "⚡ İndirilenler Klasörünü Tara ve Toplu İndir (TEK TIK)",
+                "Toplu İndir (URL Listesi Seçmeli)",
                 "Beğenilen Videoları İndir",
                 "Favori Videoları İndir",
                 "TikTok Veri Export'u Kullan",
@@ -48,6 +49,8 @@ class TikTokController(BaseController):
             try:
                 if "Tek Video" in choice:
                     self.handle_single()
+                elif "Tara ve Toplu İndir" in choice:
+                    self.handle_auto_scan()
                 elif "Toplu İndir" in choice:
                     self.handle_bulk_file()
                 elif "Beğenilen" in choice:
@@ -84,21 +87,26 @@ class TikTokController(BaseController):
             
         self.ui.wait_for_enter()
 
-    def handle_bulk_file(self) -> None:
-        """Download videos from a text file."""
-        file_path = self.prompt_url_list_file("TikTok", keyword="tiktok")
-        if not file_path:
-            return
-            
+    def _execute_bulk(self, file_path: str) -> None:
+        """Execute bulk download from a file path."""
         self.ui.console.print("\n[bold cyan]Toplu İndirme Başlatılıyor...[/bold cyan]\n")
-        
         successful, failed, skipped, failed_urls = self.downloader.bulk_download_from_file(
             file_path, 
             progress_callback=self.ui.show_progress
         )
-        
         self.ui.show_summary(successful, failed, failed_urls, skipped)
         self.ui.wait_for_enter()
+
+    def handle_auto_scan(self) -> None:
+        """1-Click scan Downloads folder and download TikTok videos."""
+        self.auto_scan_and_bulk_download("TikTok", "tiktok", self._execute_bulk)
+
+    def handle_bulk_file(self) -> None:
+        """Download videos from a text file with picker."""
+        file_path = self.prompt_url_list_file("TikTok", keyword="tiktok")
+        if not file_path:
+            return
+        self._execute_bulk(file_path)
 
     def handle_liked(self) -> None:
         """Download liked videos from exported file."""

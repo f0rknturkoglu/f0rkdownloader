@@ -115,6 +115,16 @@ class TestYoutubeDownloader(BaseDownloaderTestCase):
         self.assertIn("https://www.youtube.com/watch?v=12345678901", urls)
         self.assertIn("https://youtu.be/abcdefghijk", urls)
 
+    def test_read_urls_from_directory_path(self):
+        downloader = YoutubeDownloader(self.config)
+        sub_dir = Path(self.test_dir) / "yt_url_folder"
+        sub_dir.mkdir()
+        test_file = sub_dir / "f0rkn_youtube_urls_2026.txt"
+        test_file.write_text("https://www.youtube.com/watch?v=12345678901\n", encoding="utf-8")
+        urls = downloader.read_urls_from_file(str(sub_dir))
+        self.assertEqual(len(urls), 1)
+        self.assertEqual(urls[0], "https://www.youtube.com/watch?v=12345678901")
+
     def test_bulk_download(self):
         downloader = YoutubeDownloader(self.config)
         urls = [
@@ -230,6 +240,16 @@ class TestTwitterDownloader(BaseDownloaderTestCase):
         urls = downloader.read_urls_from_file(str(test_file))
         self.assertEqual(len(urls), 2)
 
+    def test_read_urls_from_directory_path(self):
+        downloader = TwitterDownloader(self.config)
+        sub_dir = Path(self.test_dir) / "twitter_url_folder"
+        sub_dir.mkdir()
+        test_file = sub_dir / "f0rkn_twitter_urls_2026.txt"
+        test_file.write_text("https://x.com/user/status/111222333\n", encoding="utf-8")
+        urls = downloader.read_urls_from_file(str(sub_dir))
+        self.assertEqual(len(urls), 1)
+        self.assertEqual(urls[0], "https://x.com/user/status/111222333")
+
     def test_bulk_download(self):
         downloader = TwitterDownloader(self.config)
         urls = ["https://x.com/user/status/111", "https://x.com/user/status/222"]
@@ -279,6 +299,16 @@ class TestTikTokDownloader(BaseDownloaderTestCase):
         downloader._save_failed_urls(["https://www.tiktok.com/@user/video/failed123"])
         files = list(downloader.tiktok_download_path.glob("failed_downloads_*.txt"))
         self.assertGreaterEqual(len(files), 1)
+
+    def test_read_urls_from_directory_path(self):
+        downloader = TikTokDownloader(self.config)
+        sub_dir = Path(self.test_dir) / "tiktok_url_folder"
+        sub_dir.mkdir()
+        test_file = sub_dir / "f0rkn_tiktok_urls_2026.txt"
+        test_file.write_text("https://www.tiktok.com/@user/video/777888999\n", encoding="utf-8")
+        urls = downloader.read_urls_from_file(str(sub_dir))
+        self.assertEqual(len(urls), 1)
+        self.assertEqual(urls[0], "https://www.tiktok.com/@user/video/777888999")
 
     def test_bulk_download(self):
         downloader = TikTokDownloader(self.config)

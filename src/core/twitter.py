@@ -11,6 +11,7 @@ import subprocess
 import threading
 from collections.abc import Callable
 from http.cookiejar import MozillaCookieJar
+from pathlib import Path
 from typing import Any
 
 from src.core.base import DownloaderBase, ValidationError
@@ -117,12 +118,25 @@ class TwitterDownloader(DownloaderBase):
 
     def read_urls_from_file(self, file_path: str) -> list[str]:
         """Read Twitter URLs from a text file."""
-        if not os.path.exists(file_path):
+        path = Path(file_path)
+        if not path.exists():
             raise FileNotFoundError(f"Dosya bulunamadı: {file_path}")
-            
+
+        if path.is_dir():
+            candidates = sorted(
+                path.glob("*.txt"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True
+            )
+            valid_txt = [c for c in candidates if "cookie" not in c.name.lower()]
+            if valid_txt:
+                path = valid_txt[0]
+            else:
+                raise ValidationError(f"Belirtilen klasörde geçerli bir .txt URL listesi bulunamadı: {file_path}")
+
         urls = []
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(path, 'r', encoding='utf-8') as f:
                 for line in f:
                     line = line.strip()
                     if line and ("twitter.com" in line or "x.com" in line):
