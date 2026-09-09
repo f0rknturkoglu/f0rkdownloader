@@ -176,3 +176,146 @@ class BaseController(ABC):
             ).ask()
             return manual_path.strip() if manual_path else None
 
+    def find_url_list_files(
+        self,
+        platform_keyword: str = "",
+        search_dirs: list[Path] | None = None
+    ) -> list[Path]:
+        """
+        Scan common directories for URL list text files exported by UserScript
+        or created by the user. Excludes cookie files.
+        """
+        if search_dirs is None:
+            search_dirs = [
+                Path.home() / "Downloads",
+                Path(getattr(self.config, "download_path", Path.home() / "Downloads")),
+                Path.cwd(),
+                Path.home() / "Desktop"
+            ]
+
+        candidates: dict[str, Path] = {}
+        keyword = platform_keyword.lower().strip()
+
+        for directory in search_dirs:
+            if not directory.exists() or not directory.is_dir():
+                continue
+            try:
+                for file_path in directory.glob("*.txt"):
+                    if not file_path.is_file():
+                        continue
+
+                    name_lower = file_path.name.lower()
+                    # Skip cookie files
+                    if "cookie" in name_lower:
+                        continue
+
+                    is_candidate = False
+
+                    # 1. Match UserScript export patterns or generic URL/video list naming
+                    if keyword and f"_{keyword}_" in name_lower:
+                        is_candidate = True
+                    elif keyword and keyword in name_lower and ("url" in name_lower or "video" in name_lower):
+                        is_candidate = True
+                    elif "urls" in name_lower or "video_list" in name_lower or "linkler" in name_lower or "videolar" in name_lower:
+                        is_candidate = True
+                    else:
+                        # 2. Inspect first few lines for http/https URLs (<5MB)
+                        try:
+                            if file_path.stat().st_size < 5 * 1024 * 1024:
+                                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                                    for _ in range(5):
+                                        line = f.readline().strip()
+                                        if line.startswith("http://") or line.startswith("https://"):
+                                            is_candidate = True
+                                            break
+                        except Exception:
+                            pass
+
+                    if is_candidate:
+                        # If a specific platform is requested, avoid files explicitly named after another platform
+                        if keyword:
+                            other_platforms = {"youtube", "twitter", "x.com", "tiktok", "facebook"} - {keyword}
+                            if any(op in name_lower for op in other_platforms) and keyword not in name_lower:
+                                continue
+                        candidates[str(file_path.resolve())] = file_path
+            except Exception:
+                continue
+
+        # Sort by modification time, newest first
+        sorted_files = sorted(
+            candidates.values(),
+            key=lambda p: p.stat().st_mtime if p.exists() else 0,
+            reverse=True
+        )
+        return sorted_files
+
+    def prompt_url_list_file(
+        self,
+        platform_name: str = "Platform",
+        keyword: str = "",
+        search_dirs: list[Path] | None = None
+    ) -> str | None:
+        """
+        Interactive URL list file picker. Automatically scans Downloads folder and
+        presents detected URL list files with timestamps and count, or allows manual entry.
+        """
+        import questionary
+        from datetime import datetime
+
+        detected = self.find_url_list_files(keyword, search_dirs=search_dirs)
+
+        if detected:
+            self.ui.console.print(
+                f"\n[bold green]✓ İndirilenler / sistem klasörlerinde {len(detected)} adet URL listesi bulundu![/bold green]\n"
+            )
+
+            choices = []
+            for idx, path in enumerate(detected[:8]):
+                try:
+                    mtime = datetime.fromtimestamp(path.stat().st_mtime).strftime("%d.%m %H:%M")
+                    # Approximate URL count
+                    url_count = 0
+                    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                        for line in f:
+                            if line.strip() and not line.strip().startswith("#"):
+                                url_count += 1
+                    count_str = f"~{url_count} URL"
+                    badge = " [EN YENİ]" if idx == 0 else ""
+                    folder_label = "İndirilenler" if "Downloads" in str(path) else path.parent.name
+                    label = f"📄 {path.name} [{folder_label}] ({mtime}, {count_str}){badge}"
+                except Exception:
+                    label = f"📄 {path.name}"
+                choices.append(label)
+
+            choices.append("📁 Farklı Bir Dosya Yolu Gir (Manuel)")
+            choices.append("🔙 İptal / Geri Dön")
+
+            selected = questionary.select(
+                f"{platform_name} Toplu İndirme için URL Listesi Seçin:",
+                choices=choices,
+                style=self.ui.custom_style
+            ).ask()
+
+            if not selected or "İptal" in selected:
+                return None
+
+            if "Manuel" in selected:
+                manual_path = questionary.text(
+                    "URL listesi tam dosya yolu (.txt):",
+                    style=self.ui.custom_style
+                ).ask()
+                return manual_path.strip() if manual_path else None
+
+            # Find chosen path
+            for idx, choice_label in enumerate(choices[:len(detected[:8])]):
+                if selected == choice_label:
+                    return str(detected[idx])
+        else:
+            self.ui.console.print("\n[yellow]ℹ İndirilenler klasöründe otomatik URL listesi (.txt) bulunamadı.[/yellow]")
+            manual_path = questionary.text(
+                f"{platform_name} URL Listesi Dosya Yolu (.txt):",
+                style=self.ui.custom_style
+            ).ask()
+            return manual_path.strip() if manual_path else None
+
+

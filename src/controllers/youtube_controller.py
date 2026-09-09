@@ -149,8 +149,7 @@ class YouTubeController(BaseController):
 
     def handle_bulk_download(self) -> None:
         """Download multiple YouTube videos from file."""
-        import questionary
-        file_path = questionary.text("URL Listesi Dosya Yolu (.txt):", style=self.ui.custom_style).ask()
+        file_path = self.prompt_url_list_file("YouTube", keyword="youtube")
         if not file_path:
             return
 

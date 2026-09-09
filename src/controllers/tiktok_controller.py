@@ -86,8 +86,7 @@ class TikTokController(BaseController):
 
     def handle_bulk_file(self) -> None:
         """Download videos from a text file."""
-        import questionary
-        file_path = questionary.text("URL Listesi Dosya Yolu:", style=self.ui.custom_style).ask()
+        file_path = self.prompt_url_list_file("TikTok", keyword="tiktok")
         if not file_path:
             return
             
@@ -103,8 +102,7 @@ class TikTokController(BaseController):
 
     def handle_liked(self) -> None:
         """Download liked videos from exported file."""
-        import questionary
-        file_path = questionary.text("Beğenilenler URL Listesi Dosya Yolu:", style=self.ui.custom_style).ask()
+        file_path = self.prompt_url_list_file("TikTok Beğenilenler", keyword="tiktok")
         if not file_path:
             return
             
@@ -120,8 +118,7 @@ class TikTokController(BaseController):
 
     def handle_favorites(self) -> None:
         """Download favorite videos from exported file."""
-        import questionary
-        file_path = questionary.text("Favoriler URL Listesi Dosya Yolu:", style=self.ui.custom_style).ask()
+        file_path = self.prompt_url_list_file("TikTok Favoriler", keyword="tiktok")
         if not file_path:
             return
             

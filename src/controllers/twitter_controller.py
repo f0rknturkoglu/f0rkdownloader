@@ -134,8 +134,7 @@ class TwitterController(BaseController):
     
     def handle_bulk(self) -> None:
         """Download multiple Twitter videos from file."""
-        import questionary
-        file_path = questionary.text("URL Listesi Dosya Yolu (.txt):", style=self.ui.custom_style).ask()
+        file_path = self.prompt_url_list_file("Twitter/X", keyword="twitter")
         if not file_path:
             return
         

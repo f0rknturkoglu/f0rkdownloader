@@ -172,7 +172,72 @@ class TestControllers(unittest.TestCase):
             self.account_ctrl.handle_auto_scan_and_connect()
             mock_apply.assert_called_once_with(str(cookie_file))
 
+    def test_find_url_list_files_empty(self):
+        """Test finding URL list files in an empty directory."""
+        empty_dir = Path(self.test_dir) / "Empty_Urls"
+        empty_dir.mkdir()
+        results = self.base_ctrl.find_url_list_files(search_dirs=[empty_dir])
+        self.assertEqual(results, [])
+
+    def test_find_url_list_files_detected(self):
+        """Test finding URL list files by pattern matching and keyword."""
+        urls_dir = Path(self.test_dir) / "Downloads_Urls"
+        urls_dir.mkdir()
+        f1 = urls_dir / "f0rkn_twitter_urls_2026-09-10.txt"
+        f1.write_text("https://x.com/user/status/123\n", encoding="utf-8")
+        f2 = urls_dir / "tiktok_videos_backup.txt"
+        f2.write_text("https://tiktok.com/@u/video/456\n", encoding="utf-8")
+        f3 = urls_dir / "cookies.txt"
+        f3.write_text("# Netscape HTTP Cookie File", encoding="utf-8")
+        f4 = urls_dir / "random_notes.txt"
+        f4.write_text("just some text", encoding="utf-8")
+
+        # Search for twitter
+        tw_results = self.base_ctrl.find_url_list_files("twitter", search_dirs=[urls_dir])
+        self.assertEqual(len(tw_results), 1)
+        self.assertEqual(tw_results[0].name, "f0rkn_twitter_urls_2026-09-10.txt")
+
+        # Search all
+        all_results = self.base_ctrl.find_url_list_files(search_dirs=[urls_dir])
+        names = [r.name for r in all_results]
+        self.assertIn("f0rkn_twitter_urls_2026-09-10.txt", names)
+        self.assertIn("tiktok_videos_backup.txt", names)
+        self.assertNotIn("cookies.txt", names)
+
+    def test_find_url_list_files_content_inspect(self):
+        """Test inspecting file content when file name is generic."""
+        urls_dir = Path(self.test_dir) / "Content_Urls"
+        urls_dir.mkdir()
+        unnamed = urls_dir / "custom_batch.txt"
+        unnamed.write_text("https://www.youtube.com/watch?v=dQw4w9WgXcQ\n", encoding="utf-8")
+
+        results = self.base_ctrl.find_url_list_files(search_dirs=[urls_dir])
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].name, "custom_batch.txt")
+
+    def test_prompt_url_list_file_select_detected(self):
+        """Test prompt_url_list_file selecting detected file from menu."""
+        urls_dir = Path(self.test_dir) / "Prompt_Urls"
+        urls_dir.mkdir()
+        url_file = urls_dir / "f0rkn_youtube_urls_2026.txt"
+        url_file.write_text("https://www.youtube.com/watch?v=123\n", encoding="utf-8")
+
+        with patch("questionary.select") as mock_select:
+            mock_select.return_value.ask.side_effect = lambda: mock_select.call_args[1]["choices"][0]
+            chosen = self.base_ctrl.prompt_url_list_file("YouTube", search_dirs=[urls_dir])
+            self.assertEqual(chosen, str(url_file))
+
+    def test_prompt_url_list_file_manual(self):
+        """Test prompt_url_list_file falls back to manual entry."""
+        empty_dir = Path(self.test_dir) / "Empty_Prompt_Urls"
+        empty_dir.mkdir()
+
+        with patch("questionary.text") as mock_text:
+            mock_text.return_value.ask.return_value = "/manual/path/urls.txt"
+            chosen = self.base_ctrl.prompt_url_list_file("YouTube", search_dirs=[empty_dir])
+            self.assertEqual(chosen, "/manual/path/urls.txt")
 
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -79,8 +79,7 @@ class FacebookController(BaseController):
 
     def handle_bulk(self) -> None:
         """Download multiple Facebook videos from a file."""
-        import questionary
-        file_path = questionary.text("URL Listesi Dosya Yolu:", style=self.ui.custom_style).ask()
+        file_path = self.prompt_url_list_file("Facebook", keyword="facebook")
         if not file_path:
             return
             
@@ -104,7 +103,7 @@ class FacebookController(BaseController):
         self.ui.console.print("\n[bold cyan]Seçenek 1: Tampermonkey Script (Tavsiye Edilen)[/bold cyan]")
         self.ui.console.print(
             f"[dim]Dosya Konumu:[/dim] [white]{script_path}[/white]\n"
-            "[dim]Bu dosyayı Tampermonkey eklentisine ekleyerek Facebook, TikTok ve Twitter "
+            "[dim]Bu dosyayı Tampermonkey eklentisine ekleyerek YouTube, TikTok, Facebook ve Twitter/X "
             "üzerinde gelişmiş bir toplama paneli kullanabilirsiniz.[/dim]\n"
         )
         
