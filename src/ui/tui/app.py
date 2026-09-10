@@ -127,7 +127,6 @@ class F0rkDownloaderTUI(App):
 
     .pane-title {
         text-style: bold;
-        font-size: 16;
         color: #38bdf8;
         margin-bottom: 1;
     }
