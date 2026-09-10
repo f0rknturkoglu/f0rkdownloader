@@ -4,7 +4,7 @@
 
 ![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
 [![CI](https://github.com/f0rknturkoglu/f0rkdownloader/actions/workflows/ci.yml/badge.svg)](https://github.com/f0rknturkoglu/f0rkdownloader/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/Tests-139%2F139%20Passing-brightgreen?logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/Tests-141%2F141%20Passing-brightgreen?logo=pytest&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
 ![Architecture](https://img.shields.io/badge/Architecture-MVC%20Modular-orange)
