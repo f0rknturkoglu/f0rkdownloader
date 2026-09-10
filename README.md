@@ -4,12 +4,12 @@
 
 ![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
 [![CI](https://github.com/f0rknturkoglu/f0rkdownloader/actions/workflows/ci.yml/badge.svg)](https://github.com/f0rknturkoglu/f0rkdownloader/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/Tests-113%2F113%20Passing-brightgreen?logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/Tests-139%2F139%20Passing-brightgreen?logo=pytest&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
 ![Architecture](https://img.shields.io/badge/Architecture-MVC%20Modular-orange)
 
-**YouTube, Twitter/X, TikTok ve Facebook için Yüksek Performanslı, Çoklu İş Parçacıklı CLI Video & Ses İndirici**
+**YouTube, Twitter/X, TikTok, Facebook, Instagram ve Pinterest için Modern Textual TUI & CLI Medya İndirici**
 
 </div>
 
@@ -50,6 +50,22 @@ Modüler **MVC (Model-View-Controller)** mimarisi, thread-safe (iş parçacığ�
   - Metin dosyasından **Toplu İndirme**
   - **Hibrit İndirme Motoru:** Hızlı doğrudan indirme + Modern headless Selenium 4 entegrasyonu
   - `atexit` güvenliği ile zombi ChromeDriver/Chrome süreçlerinin otomatik kapatılması
+- **Instagram:**
+  - Reels, gönderi ve video indirme
+  - Metin dosyasından eşzamanlı **Toplu İndirme** ve İndirilenler klasörünü otomatik tarama
+  - `yt-dlp` + `gallery-dl` çift motorlu fallback mimarisi
+- **Pinterest:**
+  - Pin görselleri ve Pin videoları indirme
+  - Metin dosyasından eşzamanlı **Toplu İndirme**
+  - `gallery-dl` ve `yt-dlp` motorları ile tam uyumluluk
+
+### Otomasyon Servisleri ve Zengin TUI
+- **Modern Textual Dashboard (TUI):** Sol kenar çubuğu (Sidebar), canlı ilerleme çubuğu ve anlık log konsolu ile zengin terminal arayüzü (`python main.py`). Klasik arayüz için `python main.py --cli` kullanılabilir.
+- **Pano İzleme Servisi (Clipboard Watcher):** Panoya kopyalanan YouTube, TikTok, Twitter, Facebook, Instagram veya Pinterest linklerini otomatik yakalar.
+- **Kanal ve Profil Takipçisi (Channel Watcher):** Belirlenen kanalları periyodik tarayarak yeni yüklenen videoları otomatik indirir ve arşivler.
+- **Tarayıcı Köprü Sunucusu (Localhost Bridge):** Tampermonkey UserScript üzerinden toplanan URL'leri tek tıkla doğrudan CLI kuyruğuna aktaran yerel HTTP sunucusu (`127.0.0.1:48123`).
+- **Zengin MP3 Metadata & Albüm Kapağı:** Ses indirmelerinde ID3v2 etiketleri (şarkı, sanatçı, albüm) ve gömülü albüm kapak resmi otomatik işlenir.
+- **İnteraktif Çözünürlük ve Kodek Seçici:** Video indirmeden önce 4K, 1440p, 1080p, 720p veya 320 kbps MP3 formatlarını interaktif menüden seçebilme imkanı.
 
 ### Performans ve Mimari
 - **Eşzamanlı İndirme (Multithreading):** Ayarlar menüsünden 1 ila 5 iş parçacığı (`max_workers`) seçilebilir. 100+ videoluk listeler donma olmadan paralel indirilir.

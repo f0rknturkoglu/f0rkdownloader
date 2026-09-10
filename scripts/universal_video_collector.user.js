@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         f0rkn Universal Video Collector
 // @namespace    https://github.com/f0rknturkoglu
-// @version      2.0.1
-// @description  YouTube, TikTok, Facebook ve Twitter/X video URL'lerini akıllıca toplar. Virtual DOM desteği, video filtresi ve f0rkn_d0wnl0ader CLI entegrasyonu sunar.
+// @version      3.0.0
+// @description  YouTube, TikTok, Facebook, Twitter/X, Instagram ve Pinterest URL'lerini akilli ve yuksek performansli toplar. f0rkdownloader CLI/TUI koprusu entegrasyonu sunar.
 // @author       f0rknturkoglu
 // @match        https://www.youtube.com/*
 // @match        https://youtube.com/*
@@ -13,39 +13,49 @@
 // @match        https://web.facebook.com/*
 // @match        https://twitter.com/*
 // @match        https://x.com/*
+// @match        https://www.instagram.com/*
+// @match        https://instagram.com/*
+// @match        https://www.pinterest.com/*
+// @match        https://pinterest.com/*
+// @match        https://*.pinterest.com/*
+// @connect      127.0.0.1
+// @connect      localhost
 // @icon         https://raw.githubusercontent.com/f0rknturkoglu/f0rkdownloader/main/icon.png
 // @grant        GM_setClipboard
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_xmlhttpRequest
 // @run-at       document-idle
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    // ════════════════════════════════════════════════════════════════
-    // PLATFORM TESPİTİ
-    // ════════════════════════════════════════════════════════════════
+    // ================================================================
+    // PLATFORM TESPITI
+    // ================================================================
     const PLATFORM = (() => {
         const host = window.location.hostname;
         if (host.includes('youtube.com')) return 'youtube';
         if (host.includes('tiktok.com')) return 'tiktok';
         if (host.includes('facebook.com')) return 'facebook';
         if (host.includes('twitter.com') || host.includes('x.com')) return 'twitter';
+        if (host.includes('instagram.com')) return 'instagram';
+        if (host.includes('pinterest.com')) return 'pinterest';
         return null;
     })();
 
     if (!PLATFORM) return;
 
-    // ════════════════════════════════════════════════════════════════
+    // ================================================================
     // PLATFORM YAPILANDIRMASI
-    // ════════════════════════════════════════════════════════════════
+    // ================================================================
     const CONFIGS = {
         youtube: {
             name: 'YouTube',
             color: '#FF0000',
             gradient: 'linear-gradient(135deg, #FF0000 0%, #CC0000 100%)',
-            icon: '▶️',
+            tag: '[YT]',
             scrollDelay: 800,
             patterns: ['/watch', '/shorts/'],
         },
@@ -53,7 +63,7 @@
             name: 'TikTok',
             color: '#fe2c55',
             gradient: 'linear-gradient(135deg, #fe2c55 0%, #25f4ee 100%)',
-            icon: '🎵',
+            tag: '[TK]',
             scrollDelay: 650,
             patterns: ['/video/'],
         },
@@ -61,7 +71,7 @@
             name: 'Facebook',
             color: '#1877F2',
             gradient: 'linear-gradient(135deg, #1877F2 0%, #0D47A1 100%)',
-            icon: '📘',
+            tag: '[FB]',
             scrollDelay: 1200,
             patterns: ['/videos/', '/watch', '/reel/', '/share/r/', '/share/v/'],
         },
@@ -69,9 +79,25 @@
             name: 'Twitter/X',
             color: '#1DA1F2',
             gradient: 'linear-gradient(135deg, #1DA1F2 0%, #0D8BD9 100%)',
-            icon: '🐦',
+            tag: '[X]',
             scrollDelay: 750,
             patterns: ['/status/'],
+        },
+        instagram: {
+            name: 'Instagram',
+            color: '#E1306C',
+            gradient: 'linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%)',
+            tag: '[IG]',
+            scrollDelay: 900,
+            patterns: ['/p/', '/reel/', '/reels/'],
+        },
+        pinterest: {
+            name: 'Pinterest',
+            color: '#E60023',
+            gradient: 'linear-gradient(135deg, #E60023 0%, #ad081b 100%)',
+            tag: '[PIN]',
+            scrollDelay: 850,
+            patterns: ['/pin/'],
         },
     };
 
@@ -79,7 +105,7 @@
     const STORAGE_KEY = `f0rkn_collector_${PLATFORM}_ids`;
     const POS_STORAGE_KEY = 'f0rkn_collector_pos';
 
-    // Kalıcı Set Yönetimi
+    // Kalici Liste Yonetimi
     let collectedUrls = new Set();
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -100,12 +126,12 @@
     }
 
     let isScrolling = false;
-    let scrollLimit = 0; // 0 = sınırsız
+    let scrollLimit = 0; // 0 = sinirsiz
     let observer = null;
 
-    // ════════════════════════════════════════════════════════════════
+    // ================================================================
     // STILLER
-    // ════════════════════════════════════════════════════════════════
+    // ================================================================
     const styles = `
         #universal-collector-panel {
             position: fixed;
@@ -142,9 +168,9 @@
         }
 
         .collector-badge {
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(0, 0, 0, 0.35);
             color: #fff;
-            padding: 2px 7px;
+            padding: 2px 8px;
             border-radius: 12px;
             font-size: 11px;
             font-weight: bold;
@@ -158,7 +184,7 @@
             padding: 12px;
             margin-top: 10px;
             box-shadow: 0 10px 35px rgba(0, 0, 0, 0.65);
-            min-width: 260px;
+            min-width: 270px;
             color: #f4f4f5;
         }
 
@@ -252,6 +278,15 @@
             filter: brightness(1.15);
         }
 
+        .collector-btn.accent {
+            background: #0284c7;
+            color: white;
+        }
+
+        .collector-btn.accent:hover {
+            background: #0369a1;
+        }
+
         .collector-btn.danger {
             background: #dc2626;
             color: white;
@@ -337,7 +372,7 @@
             border: 1px solid #27272a;
             border-radius: 14px;
             width: 90%;
-            max-width: 650px;
+            max-width: 680px;
             max-height: 80vh;
             display: flex;
             flex-direction: column;
@@ -356,7 +391,7 @@
 
         .collector-modal-header h3 {
             margin: 0;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 600;
             display: flex;
             align-items: center;
@@ -450,25 +485,24 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
         }
     `;
 
-    // ════════════════════════════════════════════════════════════════
-    // URL VE VİDEO TANIMA MOTORU
-    // ════════════════════════════════════════════════════════════════
+    // ================================================================
+    // URL VE VIDEO TANIMA MOTORU
+    // ================================================================
     function extractVideoId(url, element = null) {
         if (!url) return null;
 
         if (PLATFORM === 'youtube') {
-            // /watch?v=XXXXXXXXXXX
             const watchMatch = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
             if (watchMatch) return watchMatch[1];
 
-            // /shorts/XXXXXXXXXXX
             const shortsMatch = url.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
             if (shortsMatch) return shortsMatch[1];
 
-            // youtu.be/XXXXXXXXXXX
             const shortUrlMatch = url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
             if (shortUrlMatch) return shortUrlMatch[1];
 
@@ -476,13 +510,11 @@
         }
 
         if (PLATFORM === 'tiktok') {
-            // @user/video/1234567890123456789 or /video/1234567890123456789
             const match = url.match(/\/video\/(\d+)/);
             return match ? match[1] : null;
         }
 
         if (PLATFORM === 'facebook') {
-            // /watch/?v=123456789 or reel/123456789 or /videos/123456789
             const patterns = [
                 /\/videos\/(\d+)/,
                 /(?:watch\/?\?(?:.*&)?v=|reel\/)(\d+)/,
@@ -501,7 +533,6 @@
             if (!match) return null;
             const tweetId = match[1];
 
-            // KRİTİK FİLTRE: Tweet'in gerçekten video içerdiğini doğrula!
             if (element) {
                 const tweetArticle = element.closest('article[data-testid="tweet"]') || element.closest('article');
                 if (tweetArticle) {
@@ -514,11 +545,21 @@
                         tweetArticle.querySelector('div[aria-label*="Play"]')
                     );
                     if (!hasVideo) {
-                        return null; // Salt metin veya resim tweet'i, yoksay!
+                        return null;
                     }
                 }
             }
             return tweetId;
+        }
+
+        if (PLATFORM === 'instagram') {
+            const match = url.match(/\/(?:p|reel|reels)\/([A-Za-z0-9_-]+)/);
+            return match ? match[1] : null;
+        }
+
+        if (PLATFORM === 'pinterest') {
+            const match = url.match(/\/pin\/(\d+)/);
+            return match ? match[1] : null;
         }
 
         return null;
@@ -538,12 +579,18 @@
         if (PLATFORM === 'twitter') {
             return `https://x.com/i/status/${id}`;
         }
+        if (PLATFORM === 'instagram') {
+            return `https://www.instagram.com/reel/${id}/`;
+        }
+        if (PLATFORM === 'pinterest') {
+            return `https://www.pinterest.com/pin/${id}/`;
+        }
         return null;
     }
 
-    // ════════════════════════════════════════════════════════════════
-    // TARAMA & GÖZLEM MOTORU (MUTATIONOBSERVER)
-    // ════════════════════════════════════════════════════════════════
+    // ================================================================
+    // TARAMA & GOZLEM MOTORU (MUTATIONOBSERVER)
+    // ================================================================
     function processLink(link) {
         const href = link.href || link.getAttribute('href') || '';
         if (!href) return false;
@@ -570,10 +617,10 @@
 
         updateCount();
         if (added > 0) {
-            showStatus(`+${added} video eklendi (Toplam: ${collectedUrls.size})`, 'success');
-            notify(`+${added} video URL eklendi!`);
+            showStatus(`+${added} URL eklendi (Toplam: ${collectedUrls.size})`, 'success');
+            notify(`+${added} URL eklendi!`);
         } else {
-            showStatus('Yeni video bulunamadı', 'info');
+            showStatus('Yeni baglanti bulunamadi', 'info');
         }
         return added;
     }
@@ -599,7 +646,7 @@
             if (addedCount > 0) {
                 updateCount();
                 if (!isScrolling) {
-                    notify(`Canlı yakalandı: +${addedCount} video`);
+                    notify(`Canli yakalandi: +${addedCount} URL`);
                 }
             }
         });
@@ -610,9 +657,9 @@
         });
     }
 
-    // ════════════════════════════════════════════════════════════════
-    // GELİŞMİŞ OTOMATİK SCROLL
-    // ════════════════════════════════════════════════════════════════
+    // ================================================================
+    // GELISMIS OTOMATIK SCROLL
+    // ================================================================
     let emptyScrollRetries = 0;
 
     function toggleScroll() {
@@ -629,12 +676,12 @@
 
         isScrolling = true;
         emptyScrollRetries = 0;
-        btn.textContent = '⏹️ Durdur (Alt+S)';
+        btn.textContent = 'Durdur (Alt+S)';
         btn.classList.remove('primary');
         btn.classList.add('danger');
 
-        showStatus('Otomatik kaydırma ve toplama devrede...', 'info');
-        notify('Otomatik toplama başladı');
+        showStatus('Otomatik kaydirma ve toplama devrede...', 'info');
+        notify('Otomatik toplama basladi');
         autoScrollStep();
     }
 
@@ -642,7 +689,7 @@
         isScrolling = false;
         const btn = document.getElementById('btn-scroll');
         if (btn) {
-            btn.textContent = '🔄 Otomatik Scroll & Topla';
+            btn.textContent = 'Otomatik Kaydir & Topla';
             btn.classList.remove('danger');
             btn.classList.add('primary');
         }
@@ -653,9 +700,8 @@
     function autoScrollStep() {
         if (!isScrolling) return;
 
-        // Hedef limit kontrolü
         if (scrollLimit > 0 && collectedUrls.size >= scrollLimit) {
-            stopScroll(`Hedefe ulaşıldı: ${collectedUrls.size} video`, true);
+            stopScroll(`Hedefe ulasildi: ${collectedUrls.size} URL`, true);
             return;
         }
 
@@ -664,11 +710,9 @@
         const scrollEl = document.scrollingElement || document.documentElement;
         const before = scrollEl.scrollTop;
 
-        // İnsansı dinamik sıçrama (500 - 750px arası rastgele)
         const step = Math.floor(500 + Math.random() * 250);
         scrollEl.scrollTop += step;
 
-        // İnsansı dinamik gecikme (±120ms jitter)
         const delay = Math.max(300, CONFIG.scrollDelay + Math.floor(Math.random() * 240 - 120));
 
         setTimeout(() => {
@@ -677,15 +721,13 @@
             const after = scrollEl.scrollTop;
             const maxScroll = scrollEl.scrollHeight - window.innerHeight;
 
-            // Sayfa sonuna mı gelindi?
             if (after >= maxScroll - 60 || after === before) {
                 emptyScrollRetries++;
-                showStatus(`Yeni içerik bekleniyor... (${emptyScrollRetries}/3)`, 'info');
+                showStatus(`Yeni icerik bekleniyor... (${emptyScrollRetries}/3)`, 'info');
 
                 if (emptyScrollRetries >= 3) {
-                    stopScroll(`Tamamlandı! Toplam ${collectedUrls.size} video toplandı`, true);
+                    stopScroll(`Tamamlandi! Toplam ${collectedUrls.size} URL toplandi`, true);
                 } else {
-                    // İçerik yüklenmesi için 1.5 sn bekle ve tekrar dene
                     setTimeout(autoScrollStep, 1500);
                 }
             } else {
@@ -695,9 +737,9 @@
         }, delay);
     }
 
-    // ════════════════════════════════════════════════════════════════
-    // DIŞA AKTARMA, KOPYALAMA & MODAL
-    // ════════════════════════════════════════════════════════════════
+    // ================================================================
+    // DISA AKTARMA, KOPYALAMA, CLI KOPRUSU & MODAL
+    // ================================================================
     function getUrlList() {
         const urls = [];
         collectedUrls.forEach(id => {
@@ -710,7 +752,7 @@
     function exportUrls() {
         const urls = getUrlList();
         if (urls.length === 0) {
-            showStatus('Önce video toplayın!', 'error');
+            showStatus('Once URL toplayin!', 'error');
             return;
         }
 
@@ -736,25 +778,23 @@
     function copyUrls() {
         const urls = getUrlList();
         if (urls.length === 0) {
-            showStatus('Önce video toplayın!', 'error');
+            showStatus('Once URL toplayin!', 'error');
             return;
         }
 
         const content = urls.join('\n');
 
-        // 1. GM_setClipboard denemesi
         if (typeof GM_setClipboard === 'function') {
             GM_setClipboard(content);
-            showStatus(`${urls.length} URL panoya kopyalandı!`, 'success');
-            notify(`${urls.length} URL kopyalandı!`);
+            showStatus(`${urls.length} URL panoya kopyalandi!`, 'success');
+            notify(`${urls.length} URL kopyalandi!`);
             return;
         }
 
-        // 2. navigator.clipboard denemesi
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(content).then(() => {
-                showStatus(`${urls.length} URL panoya kopyalandı!`, 'success');
-                notify(`${urls.length} URL kopyalandı!`);
+                showStatus(`${urls.length} URL panoya kopyalandi!`, 'success');
+                notify(`${urls.length} URL kopyalandi!`);
             }).catch(() => {
                 fallbackCopy(content, urls.length);
             });
@@ -773,17 +813,70 @@
         ta.select();
         try {
             document.execCommand('copy');
-            showStatus(`${count} URL panoya kopyalandı!`, 'success');
-            notify(`${count} URL kopyalandı!`);
+            showStatus(`${count} URL panoya kopyalandi!`, 'success');
+            notify(`${count} URL kopyalandi!`);
         } catch (e) {
-            showStatus('Kopyalama başarısız oldu!', 'error');
+            showStatus('Kopyalama basarisiz oldu!', 'error');
         }
         document.body.removeChild(ta);
     }
 
+    function sendUrlsToCli() {
+        const urls = getUrlList();
+        if (urls.length === 0) {
+            showStatus('Once URL toplayin!', 'error');
+            return;
+        }
+
+        showStatus('CLI koprusune gonderiliyor...', 'info');
+
+        const payload = JSON.stringify({
+            platform: PLATFORM,
+            urls: urls,
+            timestamp: new Date().toISOString()
+        });
+
+        const onSuccess = () => {
+            showStatus(`${urls.length} link CLI kuyruguna aktarildi!`, 'success');
+            notify(`${urls.length} link CLI kuyruguna aktarildi!`);
+        };
+
+        const onError = (err) => {
+            console.error('[f0rkn Collector] Kopru hatasi:', err);
+            showStatus('CLI koprusune baglanilamadi (f0rkdownloader acik mi?)', 'error');
+            notify('CLI koprusu cevrimdisi!');
+        };
+
+        if (typeof GM_xmlhttpRequest === 'function') {
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: 'http://127.0.0.1:48123/api/queue',
+                headers: { 'Content-Type': 'application/json' },
+                data: payload,
+                onload: (res) => {
+                    if (res.status >= 200 && res.status < 300) {
+                        onSuccess();
+                    } else {
+                        onError(res.statusText);
+                    }
+                },
+                onerror: onError
+            });
+        } else {
+            fetch('http://127.0.0.1:48123/api/queue', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: payload
+            }).then(res => {
+                if (res.ok) onSuccess();
+                else onError(res.statusText);
+            }).catch(onError);
+        }
+    }
+
     function clearUrls() {
         if (collectedUrls.size === 0) return;
-        if (confirm(`Toplanan ${collectedUrls.size} videoyu listeden silmek istediğinize emin misiniz?`)) {
+        if (confirm(`Toplanan ${collectedUrls.size} URL'yi listeden silmek istediginize emin misiniz?`)) {
             collectedUrls.clear();
             persistUrls();
             updateCount();
@@ -793,9 +886,9 @@
         }
     }
 
-    // ════════════════════════════════════════════════════════════════
-    // ARAYÜZ VE SÜRÜKLENEBİLİRLİK (DRAG & DROP)
-    // ════════════════════════════════════════════════════════════════
+    // ================================================================
+    // ARAYUZ VE SURUKLENEBILIRLIK (DRAG & DROP)
+    // ================================================================
     function makeDraggable(el, handle) {
         let isDragging = false;
         let startX = 0;
@@ -843,56 +936,57 @@
     function createPanel() {
         if (document.getElementById('universal-collector-panel')) return;
 
-        // Stilleri ekle
         const styleEl = document.createElement('style');
         styleEl.textContent = styles;
         document.head.appendChild(styleEl);
 
-        // Panel öğesini oluştur
         const panel = document.createElement('div');
         panel.id = 'universal-collector-panel';
 
         panel.innerHTML = `
             <button class="collector-main-btn" id="collector-toggle">
-                <span style="font-size: 16px;">${CONFIG.icon}</span>
+                <span style="font-weight: 700;">${CONFIG.tag}</span>
                 <span>${CONFIG.name} Collector</span>
                 <span class="collector-badge" id="url-badge">${collectedUrls.size}</span>
             </button>
             <div class="collector-menu" id="collector-menu">
                 <div class="collector-header">
-                    <span>${CONFIG.name} Video Toplayıcı</span>
-                    <span style="font-size: 10px; opacity: 0.6;">v2.0</span>
+                    <span>${CONFIG.name} Toplayici</span>
+                    <span style="font-size: 10px; opacity: 0.6;">v3.0</span>
                 </div>
                 <div class="collector-count">
                     <div class="collector-count-number" id="url-count">${collectedUrls.size}</div>
-                    <div class="collector-count-label">Toplanan Video URL</div>
+                    <div class="collector-count-label">Toplanan URL Sayisi</div>
                 </div>
-                <select class="collector-limit-select" id="collector-limit-select" title="Hedef Sınırı">
-                    <option value="0">🎯 Hedef: Sınırsız</option>
-                    <option value="20">🎯 Hedef: 20 Video</option>
-                    <option value="50">🎯 Hedef: 50 Video</option>
-                    <option value="100">🎯 Hedef: 100 Video</option>
-                    <option value="250">🎯 Hedef: 250 Video</option>
+                <select class="collector-limit-select" id="collector-limit-select" title="Hedef Siniri">
+                    <option value="0">Hedef: Sinirsiz</option>
+                    <option value="20">Hedef: 20 Oge</option>
+                    <option value="50">Hedef: 50 Oge</option>
+                    <option value="100">Hedef: 100 Oge</option>
+                    <option value="250">Hedef: 250 Oge</option>
                 </select>
                 <button class="collector-btn primary" id="btn-scroll">
-                    🔄 Otomatik Scroll & Topla
+                    Otomatik Kaydir & Topla
                 </button>
                 <button class="collector-btn" id="btn-scan">
-                    🔍 Bu Sayfayı Tara
+                    Sayfayi Tara
                 </button>
                 <button class="collector-btn" id="btn-view-list">
-                    📋 Listeyi İncele / Düzenle
+                    Listeyi Incele / Duzenle
                 </button>
                 <div class="collector-divider"></div>
+                <button class="collector-btn accent" id="btn-send-cli">
+                    CLI Kuyruguna Gonder (Localhost)
+                </button>
                 <button class="collector-btn success" id="btn-export">
-                    💾 TXT Olarak Kaydet (CLI Uyumlu)
+                    TXT Olarak Kaydet (CLI Uyumlu)
                 </button>
                 <button class="collector-btn" id="btn-copy">
-                    📋 Panoya Kopyala
+                    Panoya Kopyala
                 </button>
                 <div class="collector-divider"></div>
-                <button class="collector-btn id="btn-clear" style="color: #f87171;">
-                    🗑️ Listeyi Temizle
+                <button class="collector-btn" id="btn-clear" style="color: #f87171;">
+                    Listeyi Temizle
                 </button>
                 <div class="collector-status" id="collector-status" style="display: none;"></div>
             </div>
@@ -900,7 +994,6 @@
 
         document.body.appendChild(panel);
 
-        // Kayıtlı pozisyonu geri yükle
         try {
             const savedPos = localStorage.getItem(POS_STORAGE_KEY);
             if (savedPos) {
@@ -913,15 +1006,11 @@
             }
         } catch (e) {}
 
-        // Sürüklenebilirlik bağla
         makeDraggable(panel, document.getElementById('collector-toggle'));
 
-        // Modal oluştur
         createModal();
 
-        // Event Dinleyicileri
-        document.getElementById('collector-toggle').addEventListener('click', e => {
-            // Sürükleme sonrası tıklamayı ayırt et
+        document.getElementById('collector-toggle').addEventListener('click', () => {
             document.getElementById('collector-menu').classList.toggle('show');
         });
 
@@ -937,11 +1026,12 @@
             document.getElementById('collector-menu').classList.remove('show');
             openModal();
         });
+        document.getElementById('btn-send-cli').addEventListener('click', sendUrlsToCli);
         document.getElementById('btn-export').addEventListener('click', exportUrls);
         document.getElementById('btn-copy').addEventListener('click', copyUrls);
         document.getElementById('btn-clear').addEventListener('click', clearUrls);
 
-        // Kısayol Tuşları (Alt+S, Alt+C, Alt+E, Alt+L)
+        // Kisayol Tuslari (Alt+S, Alt+C, Alt+E, Alt+L, Alt+Q)
         document.addEventListener('keydown', e => {
             if (!e.altKey) return;
             if (e.key === 's' || e.key === 'S') {
@@ -956,23 +1046,25 @@
             } else if (e.key === 'l' || e.key === 'L') {
                 e.preventDefault();
                 openModal();
+            } else if (e.key === 'q' || e.key === 'Q') {
+                e.preventDefault();
+                sendUrlsToCli();
             }
         });
 
-        // Canlı MutationObserver başlat
         startMutationObserver();
     }
 
-    // ════════════════════════════════════════════════════════════════
-    // LİSTE İNCELEME MODALI
-    // ════════════════════════════════════════════════════════════════
+    // ================================================================
+    // LISTE INCELEME MODALI
+    // ================================================================
     function createModal() {
         const overlay = document.createElement('div');
         overlay.id = 'collector-modal-overlay';
         overlay.innerHTML = `
             <div class="collector-modal">
                 <div class="collector-modal-header">
-                    <h3><span>${CONFIG.icon}</span> Toplanan Video URL Listesi (<span id="modal-total-count">0</span>)</h3>
+                    <h3><span>${CONFIG.tag}</span> Toplanan URL Listesi (<span id="modal-total-count">0</span>)</h3>
                     <button class="collector-modal-close" id="modal-close-btn">&times;</button>
                 </div>
                 <div class="collector-modal-search">
@@ -980,11 +1072,16 @@
                 </div>
                 <div class="collector-modal-body" id="modal-list-container"></div>
                 <div class="collector-modal-footer">
-                    <button class="collector-btn success" id="modal-export-btn" style="width: auto; display: inline-flex;">
-                        💾 TXT İndir
-                    </button>
-                    <button class="collector-btn primary" id="modal-copy-btn" style="width: auto; display: inline-flex;">
-                        📋 Panoya Kopyala
+                    <div style="display: flex; gap: 8px;">
+                        <button class="collector-btn success" id="modal-export-btn" style="width: auto; display: inline-flex;">
+                            TXT Indir
+                        </button>
+                        <button class="collector-btn" id="modal-copy-btn" style="width: auto; display: inline-flex;">
+                            Panoya Kopyala
+                        </button>
+                    </div>
+                    <button class="collector-btn accent" id="modal-send-cli-btn" style="width: auto; display: inline-flex;">
+                        CLI Kuyruguna Gonder
                     </button>
                 </div>
             </div>
@@ -1002,6 +1099,7 @@
 
         document.getElementById('modal-export-btn').addEventListener('click', exportUrls);
         document.getElementById('modal-copy-btn').addEventListener('click', copyUrls);
+        document.getElementById('modal-send-cli-btn').addEventListener('click', sendUrlsToCli);
     }
 
     function openModal() {
@@ -1022,7 +1120,7 @@
         container.innerHTML = '';
 
         if (collectedUrls.size === 0) {
-            container.innerHTML = '<div style="text-align: center; color: #71717a; padding: 40px;">Henüz hiç video toplanmadı.</div>';
+            container.innerHTML = '<div style="text-align: center; color: #71717a; padding: 40px;">Henuz hic URL toplanmadi.</div>';
             return;
         }
 
@@ -1043,14 +1141,14 @@
             item.innerHTML = `
                 <a href="${canonicalUrl}" target="_blank" class="collector-url-text">${canonicalUrl}</a>
                 <div class="collector-url-actions">
-                    <button class="btn-copy-item" title="Kopyala">📋</button>
-                    <button class="btn-del-item" title="Sil" style="color: #f87171;">🗑️</button>
+                    <button class="btn-copy-item" title="Kopyala">Kopyala</button>
+                    <button class="btn-del-item" title="Sil" style="color: #f87171;">Sil</button>
                 </div>
             `;
 
             item.querySelector('.btn-copy-item').addEventListener('click', () => {
                 if (navigator.clipboard) navigator.clipboard.writeText(canonicalUrl);
-                notify('URL kopyalandı');
+                notify('URL kopyalandi');
             });
 
             item.querySelector('.btn-del-item').addEventListener('click', () => {
@@ -1058,20 +1156,20 @@
                 persistUrls();
                 updateCount();
                 renderModalList(filterQuery);
-                notify('Video listeden çıkarıldı');
+                notify('URL listeden cikarildi');
             });
 
             container.appendChild(item);
         });
 
         if (matchCount === 0 && q) {
-            container.innerHTML = `<div style="text-align: center; color: #71717a; padding: 30px;">"${filterQuery}" ile eşleşen URL bulunamadı.</div>`;
+            container.innerHTML = `<div style="text-align: center; color: #71717a; padding: 30px;">"${filterQuery}" ile eslesen URL bulunamadi.</div>`;
         }
     }
 
-    // ════════════════════════════════════════════════════════════════
-    // YARDIMCI GÖRSEL BİLDİRİMLER
-    // ════════════════════════════════════════════════════════════════
+    // ================================================================
+    // YARDIMCI BILDIRIMLER
+    // ================================================================
     function updateCount() {
         const cntEl = document.getElementById('url-count');
         const badgeEl = document.getElementById('url-badge');
@@ -1091,7 +1189,7 @@
         const notif = document.createElement('div');
         notif.className = 'collector-notification';
         notif.style.background = CONFIG.color;
-        notif.innerHTML = `<span>${CONFIG.icon}</span> <span>${msg}</span>`;
+        notif.innerHTML = `<span>${CONFIG.tag}</span> <span>${msg}</span>`;
         document.body.appendChild(notif);
         setTimeout(() => {
             notif.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
@@ -1101,9 +1199,9 @@
         }, 2500);
     }
 
-    // ════════════════════════════════════════════════════════════════
-    // BAŞLATMA
-    // ════════════════════════════════════════════════════════════════
+    // ================================================================
+    // BASLATMA
+    // ================================================================
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
         setTimeout(createPanel, 1000);
     } else {

@@ -123,7 +123,8 @@ class YoutubeDownloader(DownloaderBase):
         self,
         url: str,
         progress_hooks: list[Callable] | None = None,
-        skip_duplicate_check: bool = False
+        skip_duplicate_check: bool = False,
+        custom_opts: dict | None = None,
     ) -> tuple[bool, str]:
         """
         Download a YouTube video or playlist.
@@ -132,6 +133,7 @@ class YoutubeDownloader(DownloaderBase):
             url: YouTube video or playlist URL
             progress_hooks: Optional progress callback functions
             skip_duplicate_check: Skip duplicate check (for playlists)
+            custom_opts: Optional custom yt-dlp options override
 
         Returns:
             Tuple of (success, message)
@@ -159,6 +161,10 @@ class YoutubeDownloader(DownloaderBase):
         # Add hooks
         if progress_hooks:
             ydl_opts["progress_hooks"] = progress_hooks
+
+        # Apply custom overrides if specified
+        if custom_opts:
+            ydl_opts.update(custom_opts)
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:

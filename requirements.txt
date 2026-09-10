@@ -15,3 +15,9 @@ curl_cffi>=0.7.0
 # Selenium (for Facebook)
 selenium>=4.15.0
 webdriver-manager>=4.0.0
+
+# Modern TUI & Automation
+textual>=8.0.0
+pyperclip>=1.9.0
+mutagen>=1.47.0
+

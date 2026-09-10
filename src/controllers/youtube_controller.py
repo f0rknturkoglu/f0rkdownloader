@@ -9,6 +9,7 @@ from typing import Any
 
 from src.controllers.base import BaseController
 from src.core.youtube import YoutubeDownloader
+from src.core.format_selector import FormatSelector
 
 
 class YouTubeController(BaseController):
@@ -48,23 +49,110 @@ class YouTubeController(BaseController):
         self.ui.pop_breadcrumb()
 
     def handle_single_download(self) -> None:
-        """Handle link-based download."""
+        """Handle link-based download with interactive quality/format options."""
+        import questionary
         url = self.ui.console.input("\n[bold cyan]YouTube URL (Video veya Playlist):[/bold cyan] ").strip()
         if not url:
             return
-            
+
+        mode_choices = [
+            "⚡ Hızlı İndir (Varsayılan Kalite)",
+            "🎬 Çözünürlük ve Format Seç (İnteraktif)",
+            "🎵 Sadece MP3 İndir (320 kbps + Albüm Kapağı & Metadata)",
+            "İptal"
+        ]
+
+        mode = questionary.select(
+            "İndirme Modu:",
+            choices=mode_choices,
+            style=self.ui.custom_style
+        ).ask()
+
+        if not mode or mode == "İptal":
+            return
+
+        custom_opts = None
+
+        if "İnteraktif" in mode:
+            self.ui.console.print("\n[dim]Mevcut çözünürlükler ve formatlar taranıyor...[/dim]")
+            try:
+                format_info = FormatSelector.extract_available_formats(
+                    url, cookies_file=self.config.cookies_file
+                )
+                choices_map = {c["label"]: c for c in format_info["choices"]}
+                choices_map["İptal"] = None
+
+                chosen_label = questionary.select(
+                    f"Format Seçin [{format_info['title'][:50]}...]:",
+                    choices=list(choices_map.keys()),
+                    style=self.ui.custom_style
+                ).ask()
+
+                if not chosen_label or chosen_label == "İptal":
+                    return
+
+                selected_opt = choices_map[chosen_label]
+                if selected_opt["type"] == "audio":
+                    custom_opts = {
+                        "format": selected_opt["format_spec"],
+                        "writethumbnail": True,
+                        "postprocessors": [
+                            {
+                                "key": "FFmpegExtractAudio",
+                                "preferredcodec": selected_opt.get("codec", "mp3"),
+                                "preferredquality": selected_opt.get("quality", "320"),
+                            },
+                            {
+                                "key": "FFmpegMetadata",
+                                "add_metadata": True,
+                            },
+                            {
+                                "key": "EmbedThumbnail",
+                                "already_have_thumbnail": False,
+                            },
+                        ],
+                    }
+                else:
+                    custom_opts = {
+                        "format": selected_opt["format_spec"],
+                        "merge_output_format": "mp4",
+                    }
+            except Exception as e:
+                self.ui.show_warning(f"Format listesi alınamadı ({e}), varsayılan ayarlarla devam ediliyor.")
+
+        elif "Sadece MP3" in mode:
+            custom_opts = {
+                "format": "bestaudio/best",
+                "writethumbnail": True,
+                "postprocessors": [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "320",
+                    },
+                    {
+                        "key": "FFmpegMetadata",
+                        "add_metadata": True,
+                    },
+                    {
+                        "key": "EmbedThumbnail",
+                        "already_have_thumbnail": False,
+                    },
+                ],
+            }
+
         self.ui.console.print(f"\n[bold green]İndiriliyor...[/bold green] [dim]{url}[/dim]\n")
         self.logger.download_start("youtube", url)
-        
-        success, message = self.downloader.download(url)
-        
+
+        success, message = self.downloader.download(url, custom_opts=custom_opts)
+
         if success:
             self.ui.show_success(message)
             self.logger.download_success("youtube", url)
         else:
             self.ui.show_error(message)
             self.logger.download_fail("youtube", url, message)
-            
+
         self.ui.wait_for_enter()
 
     def handle_search(self) -> None:

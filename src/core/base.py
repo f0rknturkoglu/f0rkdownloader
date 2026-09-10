@@ -63,34 +63,50 @@ class DownloaderBase(ABC):
 
     def get_base_options(self) -> dict[str, Any]:
         """Get common yt-dlp options based on config."""
-        return {
-            "format": self.config.quality,
+        is_audio = self.config.format_type == "audio"
+        opts: dict[str, Any] = {
+            "format": "bestaudio/best" if is_audio else self.config.quality,
             "quiet": True,
             "no_warnings": True,
             "ignoreerrors": True,
             "socket_timeout": 30,
             "retries": 5,
             "file_access_retries": 3,
-            "merge_output_format": "mp4",
             "js_runtimes": {
                 "node": {},
                 "deno": {},
                 "bun": {},
                 "quickjs": {},
             },
-            "postprocessors": [
-                {
-                    "key": "FFmpegVideoConvertor",
-                    "preferedformat": "mp4",
-                }
-            ] if self.config.format_type == "video" else [
+        }
+
+        if is_audio:
+            opts["writethumbnail"] = True
+            opts["postprocessors"] = [
                 {
                     "key": "FFmpegExtractAudio",
                     "preferredcodec": "mp3",
                     "preferredquality": "192",
+                },
+                {
+                    "key": "FFmpegMetadata",
+                    "add_metadata": True,
+                },
+                {
+                    "key": "EmbedThumbnail",
+                    "already_have_thumbnail": False,
+                },
+            ]
+        else:
+            opts["merge_output_format"] = "mp4"
+            opts["postprocessors"] = [
+                {
+                    "key": "FFmpegVideoConvertor",
+                    "preferedformat": "mp4",
                 }
-            ],
-        }
+            ]
+
+        return opts
 
     @staticmethod
     def find_executable(name: str) -> str | None:

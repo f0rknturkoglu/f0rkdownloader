@@ -28,6 +28,11 @@ class Icons:
     TWITTER = "🐦"
     TIKTOK = "🎵"
     FACEBOOK = "📘"
+    INSTAGRAM = "◈"
+    PINTEREST = "◎"
+    CLIPBOARD = "⚡"
+    WATCHER = "📡"
+    BRIDGE = "🌐"
     CONNECTED = "●"
     DISCONNECTED = "○"
     ARROW = "➜"
@@ -160,6 +165,11 @@ class Interface:
             f"{Icons.TIKTOK}  TikTok",
             f"{Icons.TWITTER}  Twitter/X",
             f"{Icons.FACEBOOK}  Facebook",
+            f"{Icons.INSTAGRAM}  Instagram",
+            f"{Icons.PINTEREST}  Pinterest",
+            f"{Icons.CLIPBOARD}  Pano İzleme Servisi (Clipboard Watcher)",
+            f"{Icons.WATCHER}  Kanal ve Profil Takipçisi (Channel Watcher)",
+            f"{Icons.BRIDGE}  Tarayıcı Köprü Sunucusu (Localhost Bridge)",
             f"{Icons.SETTINGS}  Ayarlar",
             f"{Icons.ACCOUNT}  Hesap İşlemleri",
             f"{Icons.EXIT}  Çıkış",

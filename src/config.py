@@ -32,6 +32,8 @@ class Config:
         self.twitter_path = self.base_download_path / "Twitter"
         self.tiktok_path = self.base_download_path / "TikTok"
         self.facebook_path = self.base_download_path / "Facebook"
+        self.instagram_path = self.base_download_path / "Instagram"
+        self.pinterest_path = self.base_download_path / "Pinterest"
 
         # Config file path
         self.config_file_path = self.base_download_path / self.CONFIG_FILE
@@ -68,6 +70,12 @@ class Config:
         # Facebook Authentication
         self.facebook_cookies_file: str | None = None
 
+        # Instagram Authentication
+        self.instagram_cookies_file: str | None = None
+
+        # Pinterest Authentication
+        self.pinterest_cookies_file: str | None = None
+
         # Concurrency settings
         self.max_workers: int = 3
 
@@ -77,14 +85,17 @@ class Config:
     def _create_directories(self) -> None:
         """Create all necessary download directories."""
         directories = [
-            self.base_download_path,
-            self.youtube_path,
-            self.twitter_path,
-            self.tiktok_path,
-            self.facebook_path,
+            getattr(self, "base_download_path", None),
+            getattr(self, "youtube_path", None),
+            getattr(self, "twitter_path", None),
+            getattr(self, "tiktok_path", None),
+            getattr(self, "facebook_path", None),
+            getattr(self, "instagram_path", None),
+            getattr(self, "pinterest_path", None),
         ]
         for directory in directories:
-            directory.mkdir(parents=True, exist_ok=True)
+            if directory is not None:
+                directory.mkdir(parents=True, exist_ok=True)
 
     def save(self) -> None:
         """Save current settings to JSON file."""
@@ -111,6 +122,12 @@ class Config:
                 },
                 "facebook": {
                     "cookies_file": self.facebook_cookies_file,
+                },
+                "instagram": {
+                    "cookies_file": self.instagram_cookies_file,
+                },
+                "pinterest": {
+                    "cookies_file": self.pinterest_cookies_file,
                 },
             },
         }
@@ -178,6 +195,18 @@ class Config:
             
             if self.facebook_cookies_file and not Path(self.facebook_cookies_file).exists():
                 self.facebook_cookies_file = None
+
+            # Instagram
+            ig = auth.get("instagram", {})
+            self.instagram_cookies_file = ig.get("cookies_file")
+            if self.instagram_cookies_file and not Path(self.instagram_cookies_file).exists():
+                self.instagram_cookies_file = None
+
+            # Pinterest
+            pin = auth.get("pinterest", {})
+            self.pinterest_cookies_file = pin.get("cookies_file")
+            if self.pinterest_cookies_file and not Path(self.pinterest_cookies_file).exists():
+                self.pinterest_cookies_file = None
                 
         except (json.JSONDecodeError, KeyError, TypeError, OSError):
             # If config is corrupted, use defaults

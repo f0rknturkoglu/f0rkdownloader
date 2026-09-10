@@ -13,7 +13,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.config import Config
 from src.controllers.account_controller import AccountController
 from src.controllers.base import BaseController
+from src.controllers.instagram_controller import InstagramController
+from src.controllers.pinterest_controller import PinterestController
 from src.controllers.settings_controller import SettingsController
+from src.controllers.watcher_controller import AutomationController
 
 
 class ConcreteController(BaseController):
@@ -34,6 +37,8 @@ class TestControllers(unittest.TestCase):
         self.config.twitter_path = self.config.base_download_path / "Twitter"
         self.config.tiktok_path = self.config.base_download_path / "TikTok"
         self.config.facebook_path = self.config.base_download_path / "Facebook"
+        self.config.instagram_path = self.config.base_download_path / "Instagram"
+        self.config.pinterest_path = self.config.base_download_path / "Pinterest"
         self.config.config_file_path = self.config.base_download_path / "settings.json"
         self.config._set_defaults()
         self.config._create_directories()
@@ -265,8 +270,40 @@ class TestControllers(unittest.TestCase):
                 self.base_ctrl.auto_scan_and_bulk_download("TikTok", "tiktok", mock_bulk)
                 mock_bulk.assert_called_once_with(str(target_file))
 
+    def test_instagram_controller_handle_single(self):
+        """Test InstagramController handle_single."""
+        ig_ctrl = InstagramController(self.config, self.ui)
+        ig_ctrl.downloader = MagicMock()
+        ig_ctrl.downloader.download.return_value = (True, "Başarıyla indirildi")
+
+        with patch("questionary.text") as mock_text:
+            mock_text.return_value.ask.return_value = "https://www.instagram.com/reel/C12345/"
+            ig_ctrl.handle_single()
+            ig_ctrl.downloader.download.assert_called_once_with("https://www.instagram.com/reel/C12345/")
+            self.ui.show_success.assert_called_once()
+
+    def test_pinterest_controller_handle_single(self):
+        """Test PinterestController handle_single."""
+        pin_ctrl = PinterestController(self.config, self.ui)
+        pin_ctrl.downloader = MagicMock()
+        pin_ctrl.downloader.download.return_value = (True, "Başarıyla indirildi")
+
+        with patch("questionary.text") as mock_text:
+            mock_text.return_value.ask.return_value = "https://www.pinterest.com/pin/123456789/"
+            pin_ctrl.handle_single()
+            pin_ctrl.downloader.download.assert_called_once_with("https://www.pinterest.com/pin/123456789/")
+            self.ui.show_success.assert_called_once()
+
+    def test_automation_controller_clipboard_callback(self):
+        """Test AutomationController clipboard link detection callback."""
+        auto_ctrl = AutomationController(self.config, self.ui)
+        with patch.object(self.ui.console, "print"):
+            auto_ctrl._on_clipboard_link("https://www.instagram.com/reel/XYZ/", "instagram")
+            self.assertTrue(len(auto_ctrl.bridge_server.host) > 0)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 

@@ -16,7 +16,9 @@ class DownloadHistory:
     """Manages download history to prevent duplicates across all platforms."""
 
     # Supported platforms
-    PLATFORMS: ClassVar[list[str]] = ["youtube", "twitter", "tiktok", "facebook"]
+    PLATFORMS: ClassVar[list[str]] = [
+        "youtube", "twitter", "tiktok", "facebook", "instagram", "pinterest"
+    ]
 
     def __init__(
         self, 
@@ -109,6 +111,27 @@ class DownloadHistory:
                 r"facebook\.com/reel/(\d+)",          # Reel URL
                 r"facebook\.com/story\.php\?story_fbid=(\d+)", # Story URL
                 r"fb\.watch/(\w+)",                   # Short URL
+            ]
+            for pattern in patterns:
+                match = re.search(pattern, url)
+                if match:
+                    return match.group(1)
+
+        elif platform == "instagram":
+            # Instagram post/reel/tv patterns
+            patterns = [
+                r"(?:instagram\.com|instagr\.am)/(?:p|reel|reels|tv)/([A-Za-z0-9_-]+)",
+            ]
+            for pattern in patterns:
+                match = re.search(pattern, url)
+                if match:
+                    return match.group(1)
+
+        elif platform == "pinterest":
+            # Pinterest pin patterns
+            patterns = [
+                r"pinterest\.[a-z.]+/pin/(\d+)",
+                r"pin\.it/([A-Za-z0-9_-]+)",
             ]
             for pattern in patterns:
                 match = re.search(pattern, url)
